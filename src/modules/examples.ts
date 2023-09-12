@@ -284,12 +284,15 @@ export class UIExampleFactory {
           );
           span.style.background = "#0dd068";
           span.innerText = "⭐" + data;
+          span.style.background = "rgb(30, 30, 30)";
+          span.style.color = "rgb(156, 220, 240)";
           return span;
         },
       },
     );
   }
 
+  /*
   @example
   static async registerCustomCellRenderer() {
     await ztoolkit.ItemTree.addRenderCellHook(
@@ -304,6 +307,7 @@ export class UIExampleFactory {
     );
     await ztoolkit.ItemTree.refresh();
   }
+  */
 
   @example
   static async registerCustomItemBoxRow() {

@@ -48,6 +48,7 @@ async function onMainWindowLoad(win: Window): Promise<void> {
     text: `[30%] ${getString("startup-begin")}`,
   });
 
+
   UIExampleFactory.registerStyleSheet();
 
   UIExampleFactory.registerRightClickMenuItem();
@@ -59,8 +60,6 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   await UIExampleFactory.registerExtraColumn();
 
   await UIExampleFactory.registerExtraColumnWithCustomCell();
-
-  await UIExampleFactory.registerCustomCellRenderer();
 
   await UIExampleFactory.registerCustomItemBoxRow();
 
