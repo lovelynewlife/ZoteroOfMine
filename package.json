@@ -1,15 +1,15 @@
 {
-  "name": "zotero-addon-template",
+  "name": "zoteroofmine",
   "version": "1.0.0",
-  "description": "Zotero Addon Template",
+  "description": "A Zotero Addon for myself.",
   "config": {
-    "addonName": "Zotero Addon Template",
-    "addonID": "addontemplate@euclpts.com",
-    "addonRef": "addontemplate",
-    "addonInstance": "AddonTemplate",
-    "prefsPrefix": "extensions.zotero.addontemplate",
-    "releasepage": "https://github.com/windingwind/zotero-addon-template/releases/latest/download/zotero-addon-template.xpi",
-    "updaterdf": "https://raw.githubusercontent.com/windingwind/zotero-addon-template/main/update.json"
+    "addonName": "ZoteroOfMine",
+    "addonID": "zoteroofmine@github.com",
+    "addonRef": "zoteroofmine",
+    "addonInstance": "ZoteroOfMine",
+    "prefsPrefix": "extensions.zotero.zoteroofmine",
+    "releasepage": "",
+    "updaterdf": "https://github.com/lovelynewlife/ZoteroOfMine/main/update.json"
   },
   "main": "src/index.ts",
   "scripts": {
@@ -58,6 +58,6 @@
     "release-it": "^16.1.0",
     "replace-in-file": "^7.0.1",
     "typescript": "^5.1.6",
-    "zotero-types": "^1.0.16"
+    "zotero-types": "^1.2.3"
   }
 }
