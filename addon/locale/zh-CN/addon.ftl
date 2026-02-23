@@ -10,3 +10,7 @@ prefs-table-detail = 详情
 tabpanel-lib-tab-label = 库标签
 tabpanel-reader-tab-label = 阅读器标签
 reading-history-label = 阅读历史
+capture-history-title = 捕获历史
+capture-history-title-label = 标题：
+capture-history-authors-label = 作者：
+capture-history-no-authors = 未知

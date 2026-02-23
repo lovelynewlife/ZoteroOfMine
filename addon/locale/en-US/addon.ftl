@@ -10,3 +10,7 @@ prefs-table-detail = Detail
 tabpanel-lib-tab-label = Lib Tab
 tabpanel-reader-tab-label = Reader Tab
 reading-history-label = Reading History
+capture-history-title = Capture History
+capture-history-title-label = Title:
+capture-history-authors-label = Authors:
+capture-history-no-authors = Unknown
