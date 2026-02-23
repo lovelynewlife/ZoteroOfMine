@@ -548,19 +548,18 @@ export class PromptExampleFactory {
             str.length && (str += ".");
             return str;
           }
-          function filter(ids: number[]) {
-            ids = ids.filter(async (id) => {
-              const item = (await Zotero.Items.getAsync(id)) as Zotero.Item;
-              return item.isRegularItem() && !(item as any).isFeedItem;
+          function filter(ids: number[]): number[] {
+            return ids.filter((id) => {
+              const item = Zotero.Items.get(id);
+              return item && item.isRegularItem() && !(item as any).isFeedItem;
             });
-            return ids;
           }
           const text = prompt.inputNode.value;
           prompt.showTip("Searching...");
           const s = new Zotero.Search();
           s.addCondition("quicksearch-titleCreatorYear", "contains", text);
           s.addCondition("itemType", "isNot", "attachment");
-          let ids = await s.search();
+          let ids: number[] = (await s.search()) as unknown as number[];
           // prompt.exit will remove current container element.
           // @ts-ignore ignore
           prompt.exit();
@@ -607,7 +606,7 @@ export class PromptExampleFactory {
               }
             });
             if (hasValidCondition) {
-              ids = await s.search();
+              ids = (await s.search()) as unknown as number[];
             }
           }
           ids = filter(ids);

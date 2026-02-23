@@ -22,3 +22,10 @@ declare const addon: import("../src/addon").default;
 declare const __env__: "production" | "development";
 
 declare class Localization {}
+
+// Extend Zotero.Promise with delay method (Bluebird feature)
+declare namespace Zotero {
+  interface Promise<T = void> extends _ZoteroTypes.Bluebird<T> {
+    delay(ms: number): _ZoteroTypes.Bluebird<T>;
+  }
+}
