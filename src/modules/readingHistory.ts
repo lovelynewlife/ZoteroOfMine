@@ -5,6 +5,7 @@
 
 import { config } from "../../package.json";
 import { getString } from "../utils/locale";
+import { ZDB } from "../utils/zdb";
 
 export class ReadingHistoryFactory {
   private static historyRowId = `${config.addonRef}-reading-history-row`;
@@ -97,91 +98,26 @@ export class ReadingHistoryFactory {
   private static captureReadingHistory(tabID: string) {
     // Use setTimeout to defer dialog to next event loop
     // This prevents blocking PDF initialization
-    window.setTimeout(async () => {
+    window.setTimeout(() => {
       try {
         // Get the reader by tab ID
         const reader = Zotero.Reader.getByTabID(tabID);
-        if (!reader) {
+        if (!reader || !reader.itemID) {
           return;
         }
 
-        // Get the item (PDF attachment)
-        const itemID = reader.itemID;
-        if (!itemID) {
-          return;
-        }
-        const attachment = Zotero.Items.get(itemID);
-        if (!attachment) {
+        // Get item info using ZDB
+        const itemInfo = ZDB.getBasicItemInfoByAttachmentID(reader.itemID);
+        if (!itemInfo) {
           return;
         }
 
-        // Get the parent item (the actual literature entry)
-        const parentItemID = attachment.parentItemID || (attachment as any).parentID;
-        let parentItem: any = null;
-        
-        if (parentItemID) {
-          parentItem = Zotero.Items.get(parentItemID);
-        }
-
-        let title: string;
-        let authors: string;
-
-        if (!parentItem) {
-          // If no parent, use the attachment itself
-          title = attachment.getField("title") as string;
-          authors = getString("capture-history-no-authors");
-        } else {
-          // Extract title from parent item
-          title = parentItem.getField("title") as string;
-          
-          // Get authors - try multiple approaches
-          authors = this.getAuthorsFromItem(parentItem);
-        }
-
-        // Show modal dialog
-        this.showCaptureDialog(title, authors);
+        // Show notification
+        this.showCaptureDialog(itemInfo.title, itemInfo.authors);
       } catch (e) {
         ztoolkit.log("ReadingHistoryFactory: Error capturing history", e);
       }
     }, 0);
-  }
-
-  /**
-   * Get authors string from item
-   */
-  private static getAuthorsFromItem(item: any): string {
-    try {
-      // Method 1: Get all creators
-      const creators = item.getCreators();
-      if (creators && creators.length > 0) {
-        const authorNames = creators.map((c: any) => {
-          // Handle both name formats
-          if (c.name) {
-            return c.name;  // Single name field
-          } else if (c.firstName && c.lastName) {
-            return `${c.firstName} ${c.lastName}`.trim();
-          } else if (c.lastName) {
-            return c.lastName;
-          }
-          return "";
-        }).filter((name: string) => name);
-        
-        if (authorNames.length > 0) {
-          return authorNames.join(", ");
-        }
-      }
-
-      // Method 2: Try firstCreator field
-      const firstCreator = item.getField("firstCreator");
-      if (firstCreator) {
-        return firstCreator as string;
-      }
-
-      return getString("capture-history-no-authors");
-    } catch (e) {
-      ztoolkit.log("ReadingHistoryFactory: Error getting authors", e);
-      return getString("capture-history-no-authors");
-    }
   }
 
   /**
