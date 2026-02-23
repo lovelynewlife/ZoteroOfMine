@@ -4,6 +4,7 @@
  */
 
 import { config } from "../../package.json";
+import { getString } from "../utils/locale";
 
 export class ReadingHistoryFactory {
   private static historyRowId = `${config.addonRef}-reading-history-row`;
@@ -105,7 +106,7 @@ export class ReadingHistoryFactory {
             color: "var(--fill-primary)",
           },
           properties: {
-            innerText: "阅读历史",
+            innerText: getString("reading-history-label"),
           },
         },
       ],
@@ -155,7 +156,7 @@ export class ReadingHistoryFactory {
    * Click handler
    */
   private static onHistoryRowClick() {
-    new ztoolkit.ProgressWindow("阅读历史", {
+    new ztoolkit.ProgressWindow(getString("reading-history-label"), {
       closeOnClick: true,
       closeTime: 3000,
     })
