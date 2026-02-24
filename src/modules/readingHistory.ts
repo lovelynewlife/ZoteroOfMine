@@ -14,8 +14,6 @@ export class ReadingHistoryFactory {
   private static readonly CAPTURE_COOLDOWN_MS = 10000; // 10 seconds
   private static historyRowId = `${config.addonRef}-history-row`;
   private static historyRowElement: HTMLElement | null = null;
-  private static tableHelper: any = null;
-  private static isHistoryViewActive = false;
 
   /**
    * Register reading history functionality
@@ -163,148 +161,235 @@ export class ReadingHistoryFactory {
    * Handle history row click
    */
   private static onHistoryRowClick() {
-    if (this.isHistoryViewActive) {
-      this.hideHistoryView();
-    } else {
-      this.showHistoryView();
-    }
+    this.showHistoryDialog();
   }
 
   /**
-   * Show history view with VirtualizedTable
+   * Show history in a dialog with VirtualizedTable
    */
-  private static showHistoryView() {
+  private static async showHistoryDialog() {
     try {
-      const zotero = ztoolkit.getGlobal("Zotero");
-      const win = zotero.getMainWindow();
-      const doc = win.document;
-
-      const itemsPane = doc.querySelector("#zotero-items-pane") as HTMLElement;
-      if (!itemsPane) return;
-
-      const itemsTree = doc.querySelector("#zotero-items-tree") as HTMLElement;
-      if (!itemsTree) return;
-
-      // Create or get history container
-      let historyContainer = doc.getElementById(
-        `${config.addonRef}-history-container`
-      ) as HTMLElement;
-
-      if (!historyContainer) {
-        historyContainer = ztoolkit.UI.createElement(doc, "div", {
-          id: `${config.addonRef}-history-container`,
-          namespace: "html",
-          styles: {
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-          },
-        });
-        itemsPane.insertBefore(historyContainer, itemsTree);
-      }
-
-      // Hide original items tree, show history container
-      itemsTree.style.display = "none";
-      historyContainer.style.display = "flex";
-
-      // Get and prepare history data
       const historyStorage = HistoryStorage.getInstance();
       const entries = historyStorage.getAll();
-      ztoolkit.log(`[ReadingHistory] Showing ${entries.length} history entries`);
+      ztoolkit.log(`[ReadingHistory] Showing ${entries.length} history entries in dialog`);
 
-      // Define columns
-      const columns = [
-        {
-          dataKey: "title",
-          label: getString("column-title"),
-          flex: 1,
+      const dialogData: { [key: string | number]: any } = {
+        loadCallback: () => {
+          ztoolkit.log("[ReadingHistory] Dialog loaded");
         },
-        {
-          dataKey: "authors",
-          label: getString("column-authors"),
-          flex: 1,
+        unloadCallback: () => {
+          ztoolkit.log("[ReadingHistory] Dialog closed");
         },
-        {
-          dataKey: "captureTime",
-          label: getString("column-time"),
-          width: 150,
-          fixedWidth: true,
-        },
-      ];
+      };
 
-      // Create VirtualizedTable using native rendering (no custom renderItem)
-      this.tableHelper = new ztoolkit.VirtualizedTable(win)
-        .setContainerId(`${config.addonRef}-history-container`)
-        .setProp("id", `${config.addonRef}-history-table`)
-        .setProp("columns", columns)
-        .setProp("showHeader", true)
-        .setProp("multiSelect", false)
-        .setProp("staticColumns", false)
-        .setProp("getRowCount", () => HistoryStorage.getInstance().getCount())
-        .setProp("getRowData", (index: number) => {
-          const storage = HistoryStorage.getInstance();
-          const entry = storage.getById(
-            storage.getAll()[index]?.id || ""
-          );
-          if (!entry) {
-            return {
-              title: "",
-              authors: "",
-              captureTime: "",
-              itemID: "",
-            };
-          }
-          return {
-            title: entry.item.title,
-            authors: entry.item.authors,
-            captureTime: new Date(entry.captureTime).toLocaleString(),
-            itemID: String(entry.item.id),
-          };
+      // Build rows content for the table
+      const tableRows = entries.map((entry, index) => ({
+        tag: "tr",
+        namespace: "html",
+        attributes: {
+          "data-item-id": String(entry.item.id),
+        },
+        styles: {
+          cursor: "pointer",
+        },
+        listeners: [
+          {
+            type: "dblclick",
+            listener: (e: Event) => {
+              const row = e.currentTarget as HTMLElement;
+              const itemID = parseInt(row.getAttribute("data-item-id") || "0");
+              dialogHelper.window?.close();
+              setTimeout(() => this.openItem(itemID), 100);
+            },
+          },
+          {
+            type: "mouseenter",
+            listener: (e: Event) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = "var(--fill-quinary)";
+            },
+          },
+          {
+            type: "mouseleave",
+            listener: (e: Event) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = "";
+            },
+          },
+        ],
+        children: [
+          {
+            tag: "td",
+            namespace: "html",
+            styles: {
+              padding: "4px 8px",
+              borderBottom: "1px solid var(--fill-quinary)",
+              backgroundColor: "-moz-dialog",
+            },
+            properties: {
+              innerText: entry.item.title,
+            },
+          },
+          {
+            tag: "td",
+            namespace: "html",
+            styles: {
+              padding: "4px 8px",
+              borderBottom: "1px solid var(--fill-quinary)",
+              backgroundColor: "-moz-dialog",
+            },
+            properties: {
+              innerText: entry.item.authors,
+            },
+          },
+          {
+            tag: "td",
+            namespace: "html",
+            styles: {
+              padding: "4px 8px",
+              borderBottom: "1px solid var(--fill-quinary)",
+              whiteSpace: "nowrap",
+              backgroundColor: "-moz-dialog",
+            },
+            properties: {
+              innerText: new Date(entry.captureTime).toLocaleString(),
+            },
+          },
+        ],
+      }));
+
+      const dialogHelper = new ztoolkit.Dialog(2, 1)
+        .setDialogData(dialogData)
+        .addCell(0, 0, {
+          tag: "div",
+          namespace: "html",
+          styles: {
+            width: "700px",
+            height: "400px",
+            overflow: "auto",
+            border: "1px solid var(--fill-quinary)",
+          },
+          children: [
+            {
+              tag: "table",
+              namespace: "html",
+              styles: {
+                width: "100%",
+                borderCollapse: "separate",
+                borderSpacing: "0",
+                fontSize: "13px",
+              },
+              children: [
+                // Header row
+                {
+                  tag: "thead",
+                  namespace: "html",
+                  children: [
+                    {
+                      tag: "tr",
+                      namespace: "html",
+                      styles: {
+                        position: "sticky",
+                        top: "0",
+                      },
+                      children: [
+                        {
+                          tag: "th",
+                          namespace: "html",
+                          styles: {
+                            padding: "8px",
+                            textAlign: "left",
+                            borderBottom: "2px solid var(--fill-tertiary)",
+                            fontWeight: "500",
+                            backgroundColor: "-moz-dialog",
+                          },
+                          properties: {
+                            innerText: getString("column-title"),
+                          },
+                        },
+                        {
+                          tag: "th",
+                          namespace: "html",
+                          styles: {
+                            padding: "8px",
+                            textAlign: "left",
+                            borderBottom: "2px solid var(--fill-tertiary)",
+                            fontWeight: "500",
+                            backgroundColor: "-moz-dialog",
+                          },
+                          properties: {
+                            innerText: getString("column-authors"),
+                          },
+                        },
+                        {
+                          tag: "th",
+                          namespace: "html",
+                          styles: {
+                            padding: "8px",
+                            textAlign: "left",
+                            borderBottom: "2px solid var(--fill-tertiary)",
+                            fontWeight: "500",
+                            backgroundColor: "-moz-dialog",
+                          },
+                          properties: {
+                            innerText: getString("column-time"),
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+                // Body rows
+                {
+                  tag: "tbody",
+                  namespace: "html",
+                  children: tableRows.length > 0 ? tableRows : [
+                    {
+                      tag: "tr",
+                      namespace: "html",
+                      children: [
+                        {
+                          tag: "td",
+                          namespace: "html",
+                          attributes: {
+                            colspan: "3",
+                          },
+                          styles: {
+                            padding: "20px",
+                            textAlign: "center",
+                            color: "var(--fill-secondary)",
+                          },
+                          properties: {
+                            innerText: getString("no-history-yet"),
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
         })
-        .setProp("onActivate", (event: any) => {
-          try {
-            const selectedIndex = this.tableHelper.treeInstance.selection.selected;
-            const entries = HistoryStorage.getInstance().getAll();
-            if (selectedIndex >= 0 && selectedIndex < entries.length) {
-              const itemID = entries[selectedIndex].item.id;
-              this.openItem(itemID);
-            }
-          } catch (e) {
-            ztoolkit.log("[ReadingHistory] Error activating row:", e);
-          }
-          return true;
+        .addButton(getString("close-label") || "Close", "close")
+        .open(getString("reading-history-label") || "Reading History", {
+          width: 750,
+          height: 500,
+          centerscreen: true,
+          resizable: true,
         });
 
-      this.tableHelper.render(0);
-      this.isHistoryViewActive = true;
+      // Store dialog reference
+      addon.data.dialog = dialogHelper;
+
+      // Wait for dialog to close
+      await dialogData.unloadLock.promise;
+      addon.data.dialog = undefined;
+
     } catch (e) {
-      ztoolkit.log("[ReadingHistory] Failed to show history view:", e);
-    }
-  }
-
-  /**
-   * Hide history view and restore original items tree
-   */
-  private static hideHistoryView() {
-    if (!this.isHistoryViewActive) return;
-    try {
-      const zotero = ztoolkit.getGlobal("Zotero");
-      const win = zotero.getMainWindow();
-      const doc = win.document;
-
-      const itemsTree = doc.querySelector("#zotero-items-tree") as HTMLElement;
-      const historyContainer = doc.getElementById(
-        `${config.addonRef}-history-container`
-      ) as HTMLElement;
-
-      if (itemsTree) itemsTree.style.display = "";
-      if (historyContainer) historyContainer.style.display = "none";
-
-      this.tableHelper = null;
-      this.isHistoryViewActive = false;
-    } catch (e) {
-      ztoolkit.log("[ReadingHistory] Failed to hide history view:", e);
+      ztoolkit.log("[ReadingHistory] Failed to show history dialog:", e);
+      if (e instanceof Error) {
+        ztoolkit.log("[ReadingHistory] Error message:", e.message);
+        ztoolkit.log("[ReadingHistory] Error stack:", e.stack);
+      }
     }
   }
 
@@ -367,46 +452,6 @@ export class ReadingHistoryFactory {
 
     this.history_notifierID = Zotero.Notifier.registerObserver(callback, ["tab"]);
     window.addEventListener("unload", () => this.unregisterNotifier(), false);
-  }
-
-  /**
-   * Capture existing reader tabs that are already open
-   * This is called when the plugin is initialized
-   */
-  private static captureExistingTabs() {
-    // Delay to ensure Zotero is fully loaded
-    window.setTimeout(() => {
-      try {
-        const tabs = Zotero_Tabs.getState();
-        ztoolkit.log(`[ReadingHistory] Checking ${tabs.length} existing tabs`);
-
-        const historyStorage = HistoryStorage.getInstance();
-
-        for (const tab of tabs) {
-          if (tab.type === "reader" && tab.id) {
-            // Check if this reader tab is already in history
-            const reader = Zotero.Reader.getByTabID(tab.id);
-            if (!reader || !reader.itemID) continue;
-
-            const existingEntries = historyStorage.getAll();
-            const alreadyCaptured = existingEntries.some(entry => entry.item.id === reader.itemID);
-
-            if (!alreadyCaptured) {
-              // Capture only if not already in history
-              ztoolkit.log(`[ReadingHistory] Capturing existing reader tab: ${tab.id}`);
-              this.captureReadingHistory(tab.id, false); // Don't show notification for existing tabs
-            } else {
-              // Even if already captured, set cooldown to avoid immediate re-capture on click
-              this.lastCaptureTime.set(tab.id, Date.now());
-              ztoolkit.log(`[ReadingHistory] Reader tab ${tab.id} already in history, setting cooldown`);
-            }
-          }
-        }
-        ztoolkit.log("[ReadingHistory] Existing tabs capture completed");
-      } catch (e) {
-        ztoolkit.log("[ReadingHistory] Failed to capture existing tabs:", e);
-      }
-    }, 2000); // 2 second delay to ensure Zotero is fully loaded
   }
 
   /**
@@ -530,9 +575,10 @@ export class ReadingHistoryFactory {
       this.historyRowElement = null;
     }
 
-    // Hide history view and restore original items tree
-    if (this.isHistoryViewActive) {
-      this.hideHistoryView();
+    // Close dialog if open
+    if (addon.data.dialog) {
+      addon.data.dialog.window?.close();
+      addon.data.dialog = undefined;
     }
 
     this.unregisterNotifier();

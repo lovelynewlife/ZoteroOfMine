@@ -19,3 +19,4 @@ history-count = History count
 column-title = Title
 column-time = Time
 column-authors = Authors
+close-label = Close

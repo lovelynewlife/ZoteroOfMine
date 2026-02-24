@@ -19,3 +19,4 @@ history-count = 历史记录数
 column-title = 标题
 column-time = 时间
 column-authors = 作者
+close-label = 关闭
