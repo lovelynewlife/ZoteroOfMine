@@ -182,6 +182,12 @@ export class ReadingHistoryFactory {
         },
       };
 
+      const setRowCellBackground = (row: HTMLElement, color: string) => {
+        row.querySelectorAll("td").forEach((cell) => {
+          (cell as HTMLElement).style.backgroundColor = color;
+        });
+      };
+
       // Build rows content for the table
       const tableRows = entries.map((entry, index) => ({
         tag: "tr",
@@ -205,13 +211,13 @@ export class ReadingHistoryFactory {
           {
             type: "mouseenter",
             listener: (e: Event) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = "var(--fill-quinary)";
+              setRowCellBackground(e.currentTarget as HTMLElement, "var(--fill-quinary)");
             },
           },
           {
             type: "mouseleave",
             listener: (e: Event) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = "";
+              setRowCellBackground(e.currentTarget as HTMLElement, "-moz-dialog");
             },
           },
         ],
@@ -265,7 +271,7 @@ export class ReadingHistoryFactory {
             width: "700px",
             height: "400px",
             overflow: "auto",
-            border: "1px solid var(--fill-quinary)",
+            border: "2px solid var(--fill-quinary)",
           },
           children: [
             {
@@ -345,6 +351,20 @@ export class ReadingHistoryFactory {
                     {
                       tag: "tr",
                       namespace: "html",
+                      listeners: [
+                        {
+                          type: "mouseenter",
+                          listener: (e: Event) => {
+                            setRowCellBackground(e.currentTarget as HTMLElement, "var(--fill-quinary)");
+                          },
+                        },
+                        {
+                          type: "mouseleave",
+                          listener: (e: Event) => {
+                            setRowCellBackground(e.currentTarget as HTMLElement, "-moz-dialog");
+                          },
+                        },
+                      ],
                       children: [
                         {
                           tag: "td",
@@ -356,6 +376,7 @@ export class ReadingHistoryFactory {
                             padding: "20px",
                             textAlign: "center",
                             color: "var(--fill-secondary)",
+                            backgroundColor: "-moz-dialog",
                           },
                           properties: {
                             innerText: getString("no-history-yet"),

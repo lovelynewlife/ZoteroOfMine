@@ -27,6 +27,7 @@ export class HistoryStorage {
   // In-memory storage: array for ordered access, map for quick lookup
   private entriesArray: ReadingHistoryEntry[] = [];
   private entriesMap: Map<string, ReadingHistoryEntry> = new Map();
+  private itemToEntryIdMap: Map<number, string> = new Map();
 
   /**
    * Get singleton instance
@@ -49,6 +50,26 @@ export class HistoryStorage {
    * Add a new entry to storage
    */
   add(entry: NewHistoryEntry): ReadingHistoryEntry {
+    const existingEntryId = this.itemToEntryIdMap.get(entry.item.id);
+    if (existingEntryId) {
+      const existingEntry = this.entriesMap.get(existingEntryId);
+      if (existingEntry) {
+        existingEntry.captureTime = Date.now();
+        existingEntry.item = entry.item;
+
+        const existingIndex = this.entriesArray.findIndex((candidate) => candidate.id === existingEntryId);
+        if (existingIndex > 0) {
+          this.entriesArray.splice(existingIndex, 1);
+          this.entriesArray.unshift(existingEntry);
+        }
+
+        this.save();
+        return existingEntry;
+      }
+
+      this.itemToEntryIdMap.delete(entry.item.id);
+    }
+
     const newEntry: ReadingHistoryEntry = {
       ...entry,
       id: this.generateId(),
@@ -58,6 +79,7 @@ export class HistoryStorage {
     // Add to both array and map
     this.entriesArray.unshift(newEntry);  // Add to beginning for newest first
     this.entriesMap.set(newEntry.id, newEntry);
+    this.itemToEntryIdMap.set(newEntry.item.id, newEntry.id);
 
     // TODO: Persist to storage (stub)
     this.save();
@@ -92,6 +114,7 @@ export class HistoryStorage {
   clear(): void {
     this.entriesArray = [];
     this.entriesMap.clear();
+    this.itemToEntryIdMap.clear();
     
     // TODO: Clear persistent storage (stub)
     this.save();
