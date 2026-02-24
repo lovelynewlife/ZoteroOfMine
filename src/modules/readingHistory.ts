@@ -16,7 +16,6 @@ export class ReadingHistoryFactory {
   private static historyRowElement: HTMLElement | null = null;
   private static tableHelper: any = null;
   private static isHistoryViewActive = false;
-  private static currentRows: Array<{ title: string; authors: string; captureTime: string; itemID: string }> = [];
 
   /**
    * Register reading history functionality
@@ -25,6 +24,8 @@ export class ReadingHistoryFactory {
     this.registerNotifier();
     this.insertHistoryRow();
     this.registerCollectionChangeListener();
+    // Capture existing tabs after a delay to ensure Zotero is fully loaded
+    this.captureExistingTabs();
     ztoolkit.log("[ReadingHistory] Module registered");
   }
 
@@ -215,6 +216,7 @@ export class ReadingHistoryFactory {
       const entries = historyStorage.getAll();
       ztoolkit.log(`[ReadingHistory] Showing ${entries.length} history entries`);
 
+      // Define columns
       const columns = [
         {
           dataKey: "title",
@@ -234,14 +236,7 @@ export class ReadingHistoryFactory {
         },
       ];
 
-      this.currentRows = entries.map((entry) => ({
-        title: entry.item.title,
-        authors: entry.item.authors,
-        captureTime: new Date(entry.captureTime).toLocaleString(),
-        itemID: String(entry.item.id),
-      }));
-
-      // Create VirtualizedTable
+      // Create VirtualizedTable using native rendering (no custom renderItem)
       this.tableHelper = new ztoolkit.VirtualizedTable(win)
         .setContainerId(`${config.addonRef}-history-container`)
         .setProp("id", `${config.addonRef}-history-table`)
@@ -249,15 +244,33 @@ export class ReadingHistoryFactory {
         .setProp("showHeader", true)
         .setProp("multiSelect", false)
         .setProp("staticColumns", false)
-        .setProp("getRowCount", () => this.currentRows.length)
-        .setProp("getRowData", (index: number) =>
-          this.currentRows[index] || { title: "", authors: "", captureTime: "" }
-        )
+        .setProp("getRowCount", () => HistoryStorage.getInstance().getCount())
+        .setProp("getRowData", (index: number) => {
+          const storage = HistoryStorage.getInstance();
+          const entry = storage.getById(
+            storage.getAll()[index]?.id || ""
+          );
+          if (!entry) {
+            return {
+              title: "",
+              authors: "",
+              captureTime: "",
+              itemID: "",
+            };
+          }
+          return {
+            title: entry.item.title,
+            authors: entry.item.authors,
+            captureTime: new Date(entry.captureTime).toLocaleString(),
+            itemID: String(entry.item.id),
+          };
+        })
         .setProp("onActivate", (event: any) => {
           try {
             const selectedIndex = this.tableHelper.treeInstance.selection.selected;
-            if (selectedIndex >= 0 && selectedIndex < this.currentRows.length) {
-              const itemID = parseInt(this.currentRows[selectedIndex].itemID);
+            const entries = HistoryStorage.getInstance().getAll();
+            if (selectedIndex >= 0 && selectedIndex < entries.length) {
+              const itemID = entries[selectedIndex].item.id;
               this.openItem(itemID);
             }
           } catch (e) {
@@ -291,7 +304,6 @@ export class ReadingHistoryFactory {
       if (historyContainer) historyContainer.style.display = "none";
 
       this.tableHelper = null;
-      this.currentRows = [];
       this.isHistoryViewActive = false;
     } catch (e) {
       ztoolkit.log("[ReadingHistory] Failed to hide history view:", e);
@@ -348,6 +360,46 @@ export class ReadingHistoryFactory {
   }
 
   /**
+   * Capture existing reader tabs that are already open
+   * This is called when the plugin is initialized
+   */
+  private static captureExistingTabs() {
+    // Delay to ensure Zotero is fully loaded
+    window.setTimeout(() => {
+      try {
+        const tabs = Zotero_Tabs.getState();
+        ztoolkit.log(`[ReadingHistory] Checking ${tabs.length} existing tabs`);
+
+        const historyStorage = HistoryStorage.getInstance();
+
+        for (const tab of tabs) {
+          if (tab.type === "reader" && tab.id) {
+            // Check if this reader tab is already in history
+            const reader = Zotero.Reader.getByTabID(tab.id);
+            if (!reader || !reader.itemID) continue;
+
+            const existingEntries = historyStorage.getAll();
+            const alreadyCaptured = existingEntries.some(entry => entry.item.id === reader.itemID);
+
+            if (!alreadyCaptured) {
+              // Capture only if not already in history
+              ztoolkit.log(`[ReadingHistory] Capturing existing reader tab: ${tab.id}`);
+              this.captureReadingHistory(tab.id, false); // Don't show notification for existing tabs
+            } else {
+              // Even if already captured, set cooldown to avoid immediate re-capture on click
+              this.lastCaptureTime.set(tab.id, Date.now());
+              ztoolkit.log(`[ReadingHistory] Reader tab ${tab.id} already in history, setting cooldown`);
+            }
+          }
+        }
+        ztoolkit.log("[ReadingHistory] Existing tabs capture completed");
+      } catch (e) {
+        ztoolkit.log("[ReadingHistory] Failed to capture existing tabs:", e);
+      }
+    }, 2000); // 2 second delay to ensure Zotero is fully loaded
+  }
+
+  /**
    * Handle notify events
    */
   private static onNotify(
@@ -384,8 +436,15 @@ export class ReadingHistoryFactory {
 
   /**
    * Capture reading history when PDF is opened
+   * @param tabID - The tab ID to capture
+   * @param showNotification - Whether to show the notification dialog (default: true)
+   * @param setCooldown - Whether to set cooldown time (default: true)
    */
-  private static captureReadingHistory(tabID: string) {
+  private static captureReadingHistory(
+    tabID: string, 
+    showNotification: boolean = true,
+    setCooldown: boolean = true
+  ) {
     // Use setTimeout to defer dialog to next event loop
     window.setTimeout(() => {
       try {
@@ -399,10 +458,17 @@ export class ReadingHistoryFactory {
         const historyStorage = HistoryStorage.getInstance();
         historyStorage.add({ item: itemInfo });
 
+        // Set cooldown time to prevent duplicate captures
+        if (setCooldown) {
+          this.lastCaptureTime.set(tabID, Date.now());
+        }
+
         ztoolkit.log(`[ReadingHistory] Captured: ${itemInfo.title}`);
 
-        // Show notification
-        this.showCaptureDialog(itemInfo.title, itemInfo.authors);
+        // Show notification only if requested
+        if (showNotification) {
+          this.showCaptureDialog(itemInfo.title, itemInfo.authors);
+        }
       } catch (e) {
         ztoolkit.log("[ReadingHistory] Failed to capture history:", e);
       }
