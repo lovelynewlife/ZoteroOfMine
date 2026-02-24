@@ -8,14 +8,15 @@ import { getString } from "../utils/locale";
 import { ZDB } from "../utils/zdb";
 import { HistoryStorage } from "./historyStore";
 
-const READING_HISTORY_TAG = "_zoteroofmine_reading_history";
-
 export class ReadingHistoryFactory {
   private static notifierID: string | null = null;
   private static lastCaptureTime: Map<string, number> = new Map();
   private static readonly CAPTURE_COOLDOWN_MS = 10000; // 10 seconds
   private static historyRowId = `${config.addonRef}-history-row`;
   private static historyRowElement: HTMLElement | null = null;
+  private static tableHelper: any = null;
+  private static isHistoryViewActive = false;
+  private static currentRows: Array<{ title: string; authors: string; captureTime: string; itemID: string }> = [];
 
   /**
    * Register reading history functionality
@@ -23,20 +24,31 @@ export class ReadingHistoryFactory {
   static async register() {
     this.registerNotifier();
     this.insertHistoryRow();
-    ztoolkit.log("[ReadingHistory] Reading history module registered");
+    this.registerCollectionChangeListener();
+    ztoolkit.log("[ReadingHistory] Module registered");
   }
 
   /**
    * Insert history row at bottom of left pane
    */
   private static insertHistoryRow() {
-    ztoolkit.log("[ReadingHistory] Inserting history row...");
-    
     try {
-      const historyRow = this.createHistoryRow(document);
-      this.findAndInsert(historyRow, document);
+      const win = window;
+      const doc = win.document;
+
+      // Wait for DOM to be ready
+      if (doc.readyState !== "complete") {
+        win.addEventListener("load", () => this.insertHistoryRow(), { once: true });
+        return;
+      }
+
+      // Small delay to ensure Zotero UI is fully rendered
+      setTimeout(() => {
+        const historyRow = this.createHistoryRow(doc);
+        this.findAndInsert(historyRow, doc);
+      }, 100);
     } catch (e) {
-      ztoolkit.log("[ReadingHistory] Error inserting history row:", e);
+      ztoolkit.log("[ReadingHistory] Failed to insert history row:", e);
     }
   }
 
@@ -117,33 +129,30 @@ export class ReadingHistoryFactory {
    * Find the correct container and insert the history row
    */
   private static findAndInsert(historyRow: HTMLElement, doc: Document) {
-    // Find the collection tree's virtualized list
     const windowedList = doc.querySelector(".windowed-list") as HTMLElement;
-    
+
     if (windowedList) {
-      // Traverse up to find a flex column container
       let target: HTMLElement | null = windowedList;
-      
+
       while (target) {
         const style = doc.defaultView?.getComputedStyle(target);
-        const isScrollable = style?.overflow === "auto" || style?.overflow === "scroll" || 
+        const isScrollable = style?.overflow === "auto" || style?.overflow === "scroll" ||
                             style?.overflowY === "auto" || style?.overflowY === "scroll";
-        const isFlexColumn = style?.display === "flex" && 
+        const isFlexColumn = style?.display === "flex" &&
                             (style?.flexDirection === "column" || !style?.flexDirection);
-        
+
         if (isScrollable || isFlexColumn || target.id === "zotero-collections-pane") {
-          // Found suitable container, append to its parent
           if (target.parentElement) {
             target.parentElement.appendChild(historyRow);
             this.historyRowElement = historyRow;
             return;
           }
         }
-        
+
         target = target.parentElement;
       }
     }
-    
+
     // Fallback: insert after #zotero-collections-pane
     const collectionsPane = doc.querySelector("#zotero-collections-pane") as HTMLElement;
     if (collectionsPane?.parentElement) {
@@ -156,137 +165,149 @@ export class ReadingHistoryFactory {
    * Handle history row click
    */
   private static onHistoryRowClick() {
-    this.showHistoryDialog();
+    if (this.isHistoryViewActive) {
+      this.hideHistoryView();
+    } else {
+      this.showHistoryView();
+    }
   }
 
   /**
-   * Show history dialog
+   * Show history view with VirtualizedTable
    */
-  static showHistoryDialog() {
-    ztoolkit.log("[ReadingHistory] Opening history dialog...");
-    
-    const historyStorage = HistoryStorage.getInstance();
-    const entries = historyStorage.getAll();
-    
-    ztoolkit.log("[ReadingHistory] Total entries:", entries.length);
+  private static showHistoryView() {
+    try {
+      const zotero = ztoolkit.getGlobal("Zotero");
+      const win = zotero.getMainWindow();
+      const doc = win.document;
 
-    const dialogData: {
-      entries: Array<{
-        title: string;
-        authors: string;
-        captureTime: string;
-        itemID: number;
-      }>;
-      loadLock: any;
-    } = {
-      entries: entries.map(entry => ({
+      const itemsPane = doc.querySelector("#zotero-items-pane") as HTMLElement;
+      if (!itemsPane) return;
+
+      const itemsTree = doc.querySelector("#zotero-items-tree") as HTMLElement;
+      if (!itemsTree) return;
+
+      // Create or get history container
+      let historyContainer = doc.getElementById(
+        `${config.addonRef}-history-container`
+      ) as HTMLElement;
+
+      if (!historyContainer) {
+        historyContainer = ztoolkit.UI.createElement(doc, "div", {
+          id: `${config.addonRef}-history-container`,
+          namespace: "html",
+          styles: {
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+          },
+        });
+        itemsPane.insertBefore(historyContainer, itemsTree);
+      }
+
+      // Hide original items tree, show history container
+      itemsTree.style.display = "none";
+      historyContainer.style.display = "flex";
+
+      // Get and prepare history data
+      const historyStorage = HistoryStorage.getInstance();
+      const entries = historyStorage.getAll();
+      ztoolkit.log(`[ReadingHistory] Showing ${entries.length} history entries`);
+
+      const columns = [
+        {
+          dataKey: "title",
+          label: getString("column-title"),
+          flex: 1,
+        },
+        {
+          dataKey: "authors",
+          label: getString("column-authors"),
+          flex: 1,
+        },
+        {
+          dataKey: "captureTime",
+          label: getString("column-time"),
+          width: 150,
+          fixedWidth: true,
+        },
+      ];
+
+      this.currentRows = entries.map((entry) => ({
         title: entry.item.title,
         authors: entry.item.authors,
         captureTime: new Date(entry.captureTime).toLocaleString(),
-        itemID: entry.item.id,
-      })),
-      loadLock: Zotero.Promise.defer(),
-    };
+        itemID: String(entry.item.id),
+      }));
 
-    // Create a simple dialog to show history
-    const dialog = new ztoolkit.Dialog(10, 10)
-      .setDialogData(dialogData)
-      .addCell(0, 0, {
-        tag: "h1",
-        styles: {
-          marginTop: "0",
-        },
-        properties: {
-          innerText: `${getString("history-count")}: ${entries.length}`,
-        },
-      })
-      .addCell(1, 0, {
-        tag: "div",
-        id: `${config.addonRef}-history-container`,
-        styles: {
-          maxHeight: "400px",
-          overflow: "auto",
-          border: "1px solid #ccc",
-          padding: "10px",
-        },
-      })
-      .addButton("Close", "close-button")
-      .open(getString("reading-history-label"), {
-        centerscreen: true,
-        resizable: true,
-        fitContent: true,
-      });
+      // Create VirtualizedTable
+      this.tableHelper = new ztoolkit.VirtualizedTable(win)
+        .setContainerId(`${config.addonRef}-history-container`)
+        .setProp("id", `${config.addonRef}-history-table`)
+        .setProp("columns", columns)
+        .setProp("showHeader", true)
+        .setProp("multiSelect", false)
+        .setProp("staticColumns", false)
+        .setProp("getRowCount", () => this.currentRows.length)
+        .setProp("getRowData", (index: number) =>
+          this.currentRows[index] || { title: "", authors: "", captureTime: "" }
+        )
+        .setProp("onActivate", (event: any) => {
+          try {
+            const selectedIndex = this.tableHelper.treeInstance.selection.selected;
+            if (selectedIndex >= 0 && selectedIndex < this.currentRows.length) {
+              const itemID = parseInt(this.currentRows[selectedIndex].itemID);
+              this.openItem(itemID);
+            }
+          } catch (e) {
+            ztoolkit.log("[ReadingHistory] Error activating row:", e);
+          }
+          return true;
+        });
 
-    // Wait for dialog to load, then render entries
-    dialogData.loadLock.promise.then(() => {
-      ztoolkit.log("[ReadingHistory] Dialog loaded, rendering entries...");
-      const container = dialog.window.document.getElementById(`${config.addonRef}-history-container`);
-      if (!container) return;
+      this.tableHelper.render(0);
+      this.isHistoryViewActive = true;
+    } catch (e) {
+      ztoolkit.log("[ReadingHistory] Failed to show history view:", e);
+    }
+  }
 
-      if (entries.length === 0) {
-        const emptyDiv = dialog.window.document.createElement("div");
-        emptyDiv.style.padding = "20px";
-        emptyDiv.style.textAlign = "center";
-        emptyDiv.style.color = "#666";
-        emptyDiv.innerText = getString("no-history-yet");
-        container.appendChild(emptyDiv);
-        return;
-      }
+  /**
+   * Hide history view and restore original items tree
+   */
+  private static hideHistoryView() {
+    try {
+      const zotero = ztoolkit.getGlobal("Zotero");
+      const win = zotero.getMainWindow();
+      const doc = win.document;
 
-      dialogData.entries.forEach((entry, index) => {
-        const entryDiv = dialog.window.document.createElement("div");
-        entryDiv.style.padding = "8px";
-        entryDiv.style.borderBottom = "1px solid #eee";
-        entryDiv.style.cursor = "pointer";
-        entryDiv.onclick = () => {
-          this.openItem(entry.itemID, dialog.window);
-        };
+      const itemsTree = doc.querySelector("#zotero-items-tree") as HTMLElement;
+      const historyContainer = doc.getElementById(
+        `${config.addonRef}-history-container`
+      ) as HTMLElement;
 
-        const titleDiv = dialog.window.document.createElement("div");
-        titleDiv.style.fontSize = "14px";
-        titleDiv.style.fontWeight = "bold";
-        titleDiv.style.marginBottom = "4px";
-        titleDiv.innerText = entry.title;
+      if (itemsTree) itemsTree.style.display = "";
+      if (historyContainer) historyContainer.style.display = "none";
 
-        const authorsDiv = dialog.window.document.createElement("div");
-        authorsDiv.style.fontSize = "12px";
-        authorsDiv.style.color = "#666";
-        authorsDiv.style.marginBottom = "2px";
-        authorsDiv.innerText = entry.authors;
-
-        const timeDiv = dialog.window.document.createElement("div");
-        timeDiv.style.fontSize = "11px";
-        timeDiv.style.color = "#999";
-        timeDiv.innerText = entry.captureTime;
-
-        entryDiv.appendChild(titleDiv);
-        entryDiv.appendChild(authorsDiv);
-        entryDiv.appendChild(timeDiv);
-        container.appendChild(entryDiv);
-      });
-
-      ztoolkit.log("[ReadingHistory] History entries rendered");
-    });
+      this.tableHelper = null;
+      this.currentRows = [];
+      this.isHistoryViewActive = false;
+    } catch (e) {
+      ztoolkit.log("[ReadingHistory] Failed to hide history view:", e);
+    }
   }
 
   /**
    * Open item in Zotero
    */
-  private static openItem(itemID: number, win: Window) {
-    ztoolkit.log("[ReadingHistory] Opening item:", itemID);
-    
+  private static openItem(itemID: number) {
     try {
       const pane = Zotero.getActiveZoteroPane();
-      if (!pane) {
-        ztoolkit.log("[ReadingHistory] ERROR: Could not get active Zotero pane");
-        return;
-      }
+      if (!pane) return;
 
       const item = Zotero.Items.get(itemID);
-      if (!item) {
-        ztoolkit.log("[ReadingHistory] Item not found:", itemID);
-        return;
-      }
+      if (!item) return;
 
       // Select the item in the library
       pane.selectItem(itemID);
@@ -302,7 +323,7 @@ export class ReadingHistoryFactory {
         }
       }
     } catch (e) {
-      ztoolkit.log("[ReadingHistory] Error opening item:", e);
+      ztoolkit.log("[ReadingHistory] Failed to open item:", e);
     }
   }
 
@@ -317,18 +338,13 @@ export class ReadingHistoryFactory {
         ids: Array<string | number>,
         extraData: { [key: string]: any },
       ) => {
-        if (!addon?.data.alive) {
-          return;
-        }
+        if (!addon?.data.alive) return;
         this.onNotify(event, type, ids, extraData);
       },
     };
 
     this.notifierID = Zotero.Notifier.registerObserver(callback, ["tab"]);
-
-    window.addEventListener("unload", () => {
-      this.unregisterNotifier();
-    }, false);
+    window.addEventListener("unload", () => this.unregisterNotifier(), false);
   }
 
   /**
@@ -340,23 +356,13 @@ export class ReadingHistoryFactory {
     ids: Array<string | number>,
     extraData: { [key: string]: any },
   ) {
-    // Handle both tab add and select events
-    if (type !== "tab" || (event !== "add" && event !== "select")) {
-      return;
-    }
+    if (type !== "tab" || (event !== "add" && event !== "select")) return;
 
-    // Check if it's a reader tab
     const tabID = ids[0] as string;
     const tabData = extraData[tabID];
-    
-    if (!tabData || tabData.type !== "reader") {
-      return;
-    }
 
-    // Check cooldown
-    if (!this.shouldCapture(tabID)) {
-      return;
-    }
+    if (!tabData || tabData.type !== "reader") return;
+    if (!this.shouldCapture(tabID)) return;
 
     this.captureReadingHistory(tabID);
   }
@@ -367,11 +373,11 @@ export class ReadingHistoryFactory {
   private static shouldCapture(tabID: string): boolean {
     const now = Date.now();
     const lastTime = this.lastCaptureTime.get(tabID);
-    
+
     if (lastTime && (now - lastTime) < this.CAPTURE_COOLDOWN_MS) {
       return false;
     }
-    
+
     this.lastCaptureTime.set(tabID, now);
     return true;
   }
@@ -381,42 +387,24 @@ export class ReadingHistoryFactory {
    */
   private static captureReadingHistory(tabID: string) {
     // Use setTimeout to defer dialog to next event loop
-    // This prevents blocking PDF initialization
     window.setTimeout(() => {
       try {
-        ztoolkit.log("[ReadingHistory] Capturing history for tab:", tabID);
-        
-        // Get the reader by tab ID
         const reader = Zotero.Reader.getByTabID(tabID);
-        if (!reader || !reader.itemID) {
-          ztoolkit.log("[ReadingHistory] Reader not found or invalid");
-          return;
-        }
+        if (!reader || !reader.itemID) return;
 
-        ztoolkit.log("[ReadingHistory] Reader itemID:", reader.itemID);
-
-        // Get complete item info using ZDB
         const itemInfo = ZDB.getItemInfoByAttachmentID(reader.itemID);
-        if (!itemInfo) {
-          ztoolkit.log("[ReadingHistory] Item info not found");
-          return;
-        }
+        if (!itemInfo) return;
 
-        ztoolkit.log("[ReadingHistory] Item info:", itemInfo.title);
-
-        // Store in history storage (using composition pattern)
+        // Store in history storage
         const historyStorage = HistoryStorage.getInstance();
-        const entry = historyStorage.add({
-          item: itemInfo,
-        });
-        
-        ztoolkit.log("[ReadingHistory] History entry added, ID:", entry.id);
-        ztoolkit.log("[ReadingHistory] Total entries:", historyStorage.getCount());
+        historyStorage.add({ item: itemInfo });
+
+        ztoolkit.log(`[ReadingHistory] Captured: ${itemInfo.title}`);
 
         // Show notification
         this.showCaptureDialog(itemInfo.title, itemInfo.authors);
       } catch (e) {
-        ztoolkit.log("[ReadingHistory] Error capturing history", e);
+        ztoolkit.log("[ReadingHistory] Failed to capture history:", e);
       }
     }, 0);
   }
@@ -453,6 +441,16 @@ export class ReadingHistoryFactory {
   }
 
   /**
+   * Register collection change listener
+   * Automatically hide history view when user selects a different collection
+   * TODO: Implement actual collection change detection
+   */
+  private static registerCollectionChangeListener() {
+    // Stub implementation - collection change detection not yet implemented
+    // Future implementation could use Zotero.Notifier with "collection" events
+  }
+
+  /**
    * Unregister all
    */
   static unregister() {
@@ -461,7 +459,12 @@ export class ReadingHistoryFactory {
       this.historyRowElement.remove();
       this.historyRowElement = null;
     }
-    
+
+    // Hide history view and restore original items tree
+    if (this.isHistoryViewActive) {
+      this.hideHistoryView();
+    }
+
     this.unregisterNotifier();
     this.lastCaptureTime.clear();
   }
