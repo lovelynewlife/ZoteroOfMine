@@ -351,46 +351,58 @@ export class UIExampleFactory {
 
   @example
   static registerLibraryTabPanel() {
-    const tabId = ztoolkit.LibraryTabPanel.register(
-      getString("tabpanel-lib-tab-label"),
-      (panel: XUL.Element, win: Window) => {
-        const elem = ztoolkit.UI.createElement(win.document, "vbox", {
-          children: [
-            {
-              tag: "h2",
-              properties: {
-                innerText: "Hello World!",
-              },
-            },
-            {
-              tag: "div",
-              properties: {
-                innerText: "This is a library tab.",
-              },
-            },
-            {
-              tag: "button",
-              namespace: "html",
-              properties: {
-                innerText: "Unregister",
-              },
-              listeners: [
-                {
-                  type: "click",
-                  listener: () => {
-                    ztoolkit.LibraryTabPanel.unregister(tabId);
-                  },
+    ztoolkit.log("[UIExample] Registering Library Tab Panel...");
+    ztoolkit.log("[UIExample] ztoolkit.LibraryTabPanel:", typeof ztoolkit.LibraryTabPanel);
+    ztoolkit.log("[UIExample] ztoolkit.LibraryTabPanel.register:", typeof ztoolkit.LibraryTabPanel?.register);
+    
+    try {
+      const tabId = ztoolkit.LibraryTabPanel.register(
+        getString("tabpanel-lib-tab-label"),
+        (panel: XUL.Element, win: Window) => {
+          ztoolkit.log("[UIExample] Tab panel callback triggered, panel:", panel, "win:", win);
+          const elem = ztoolkit.UI.createElement(win.document, "vbox", {
+            children: [
+              {
+                tag: "h2",
+                properties: {
+                  innerText: "Hello World!",
                 },
-              ],
-            },
-          ],
-        });
-        panel.append(elem);
-      },
-      {
-        targetIndex: 1,
-      },
-    );
+              },
+              {
+                tag: "div",
+                properties: {
+                  innerText: "This is a library tab.",
+                },
+              },
+              {
+                tag: "button",
+                namespace: "html",
+                properties: {
+                  innerText: "Unregister",
+                },
+                listeners: [
+                  {
+                    type: "click",
+                    listener: () => {
+                      ztoolkit.LibraryTabPanel.unregister(tabId);
+                    },
+                  },
+                ],
+              },
+            ],
+          });
+          panel.append(elem);
+        },
+        {
+          targetIndex: 1,
+        },
+      );
+      ztoolkit.log("[UIExample] Library Tab Panel registered successfully, tabId:", tabId);
+    } catch (e: unknown) {
+      ztoolkit.log("[UIExample] Error registering Library Tab Panel:", e);
+      ztoolkit.log("[UIExample] Error type:", typeof e);
+      ztoolkit.log("[UIExample] Error keys:", Object.keys(e || {}));
+    }
   }
 
   @example

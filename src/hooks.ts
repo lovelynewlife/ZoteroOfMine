@@ -31,7 +31,7 @@ async function onMainWindowLoad(win: Window): Promise<void> {
 
   /*const popupWin = new ztoolkit.ProgressWindow(config.addonName, {
     closeOnClick: true,
-    closeTime: -1,
+    closeTime: 5000,
   })
     .createLine({
       text: getString("startup-begin"),
@@ -39,10 +39,11 @@ async function onMainWindowLoad(win: Window): Promise<void> {
       progress: 0,
     })
     .show();
+    */
 
   // KeyExampleFactory.registerShortcuts();
 
-  await Zotero.Promise.delay(1000);
+  /* await Zotero.Promise.delay(1000);
   popupWin.changeLine({
     progress: 30,
     text: `[30%] ${getString("startup-begin")}`,
@@ -56,7 +57,11 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   // await UIExampleFactory.registerExtraColumn();
   // await UIExampleFactory.registerExtraColumnWithCustomCell();
   // await UIExampleFactory.registerCustomItemBoxRow();
+  
+  // Test Library Tab registration (disabled)
   // UIExampleFactory.registerLibraryTabPanel();
+  // ztoolkit.log("Test: Library Tab registration called");
+  
   // await UIExampleFactory.registerReaderTabPanel();
 
   // === Prompt Examples (disabled) ===

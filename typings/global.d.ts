@@ -28,4 +28,10 @@ declare namespace Zotero {
   interface Promise<T = void> extends _ZoteroTypes.Bluebird<T> {
     delay(ms: number): _ZoteroTypes.Bluebird<T>;
   }
+
+  // Extend Zotero with Reader
+  interface Reader {
+    getByTabID(tabID: string): { itemID: number } | null;
+    open(itemID: number): Promise<void>;
+  }
 }

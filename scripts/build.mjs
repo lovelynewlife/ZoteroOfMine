@@ -14,7 +14,11 @@ import {
 import { env, exit } from "process";
 import replaceInFile from "replace-in-file";
 const { replaceInFileSync } = replaceInFile;
-import details from "../package.json" assert { type: "json" };
+
+// Use fs.readFileSync for compatibility with both Node.js 18 and 24
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const details = require("../package.json");
 
 const { name, author, description, homepage, version, config } = details;
 
