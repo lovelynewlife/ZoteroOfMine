@@ -17,6 +17,11 @@ async function onStartup() {
     Zotero.unlockPromise,
     Zotero.uiReadyPromise,
   ]);
+
+  // Create ztoolkit after UI is ready to avoid initialization issues
+  // when Zotero starts with PDF reader instead of main window
+  addon.data.ztoolkit = createZToolkit();
+
   initLocale();
 
   // BasicExampleFactory.registerPrefs();
@@ -26,8 +31,8 @@ async function onStartup() {
 }
 
 async function onMainWindowLoad(win: Window): Promise<void> {
-  // Create ztoolkit for every window
-  addon.data.ztoolkit = createZToolkit();
+  // ztoolkit is already created in onStartup after uiReadyPromise
+  // addon.data.ztoolkit = createZToolkit();
 
   /*const popupWin = new ztoolkit.ProgressWindow(config.addonName, {
     closeOnClick: true,

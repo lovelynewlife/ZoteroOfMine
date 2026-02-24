@@ -8,7 +8,7 @@ class Addon {
     alive: boolean;
     // Env type, see build.js
     env: "development" | "production";
-    ztoolkit: ZToolkit;
+    ztoolkit: ZToolkit | null;
     locale?: {
       current: any;
     };
@@ -28,7 +28,7 @@ class Addon {
     this.data = {
       alive: true,
       env: __env__,
-      ztoolkit: createZToolkit(),
+      ztoolkit: null,  // Don't create ztoolkit here - defer to onStartup
     };
     this.hooks = hooks;
     this.api = {};
