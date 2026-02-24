@@ -9,7 +9,7 @@ import { ZDB } from "../utils/zdb";
 import { HistoryStorage } from "./historyStore";
 
 export class ReadingHistoryFactory {
-  private static notifierID: string | null = null;
+  private static history_notifierID: string | null = null;
   private static lastCaptureTime: Map<string, number> = new Map();
   private static readonly CAPTURE_COOLDOWN_MS = 10000; // 10 seconds
   private static historyRowId = `${config.addonRef}-history-row`;
@@ -23,9 +23,6 @@ export class ReadingHistoryFactory {
   static async register() {
     this.registerNotifier();
     this.insertHistoryRow();
-    this.registerCollectionChangeListener();
-    // Capture existing tabs after a delay to ensure Zotero is fully loaded
-    this.captureExistingTabs();
     ztoolkit.log("[ReadingHistory] Module registered");
   }
 
@@ -47,7 +44,7 @@ export class ReadingHistoryFactory {
       setTimeout(() => {
         const historyRow = this.createHistoryRow(doc);
         this.findAndInsert(historyRow, doc);
-      }, 100);
+      }, 1000);
     } catch (e) {
       ztoolkit.log("[ReadingHistory] Failed to insert history row:", e);
     }
@@ -290,6 +287,7 @@ export class ReadingHistoryFactory {
    * Hide history view and restore original items tree
    */
   private static hideHistoryView() {
+    if (!this.isHistoryViewActive) return;
     try {
       const zotero = ztoolkit.getGlobal("Zotero");
       const win = zotero.getMainWindow();
@@ -340,9 +338,17 @@ export class ReadingHistoryFactory {
   }
 
   /**
-   * Register notifier to capture PDF open events
+   * Register all necessary listeners.
    */
+
   static registerNotifier() {
+    this.registerHistoryNotifier();
+  }
+
+  /**
+   * Register notifier to capture history reading events
+   */
+  static registerHistoryNotifier() {
     const callback = {
       notify: async (
         event: string,
@@ -351,11 +357,15 @@ export class ReadingHistoryFactory {
         extraData: { [key: string]: any },
       ) => {
         if (!addon?.data.alive) return;
-        this.onNotify(event, type, ids, extraData);
+        try {
+          this.onHistoryRecording(event, type, ids, extraData);
+        } catch (e) {
+          ztoolkit.log("[ReadingHistory] Notifier callback failed:", e);
+        }
       },
     };
 
-    this.notifierID = Zotero.Notifier.registerObserver(callback, ["tab"]);
+    this.history_notifierID = Zotero.Notifier.registerObserver(callback, ["tab"]);
     window.addEventListener("unload", () => this.unregisterNotifier(), false);
   }
 
@@ -400,23 +410,30 @@ export class ReadingHistoryFactory {
   }
 
   /**
-   * Handle notify events
+   * Handle history recording based on notifier events
    */
-  private static onNotify(
+  private static onHistoryRecording(
     event: string,
     type: string,
     ids: Array<string | number>,
     extraData: { [key: string]: any },
   ) {
-    if (type !== "tab" || (event !== "add" && event !== "select")) return;
+    const idList = Array.isArray(ids) ? ids : [];
+    ztoolkit.log(`[ReadingHistory] Notifier event: ${event}, type: ${type}, ids: ${idList.join(",")}`);
+    if (type !== "tab") return;
 
-    const tabID = ids[0] as string;
-    const tabData = extraData[tabID];
+    if(event == "load" || event == "select" || event == "add") {
+      const rawTabID = idList[0];
+      if (rawTabID === undefined || rawTabID === null) return;
 
-    if (!tabData || tabData.type !== "reader") return;
-    if (!this.shouldCapture(tabID)) return;
+      const tabID = String(rawTabID);
+      const tabData = extraData?.[tabID] ?? extraData?.[rawTabID as any];
 
-    this.captureReadingHistory(tabID);
+      if (!tabData || tabData.type !== "reader") return;
+      if (!this.shouldCapture(tabID)) return;
+
+      this.captureReadingHistory(tabID);
+    }
   }
 
   /**
@@ -445,34 +462,31 @@ export class ReadingHistoryFactory {
     showNotification: boolean = true,
     setCooldown: boolean = true
   ) {
-    // Use setTimeout to defer dialog to next event loop
-    window.setTimeout(() => {
-      try {
-        const reader = Zotero.Reader.getByTabID(tabID);
-        if (!reader || !reader.itemID) return;
+    try {
+      const reader = Zotero.Reader.getByTabID(tabID);
+      if (!reader || !reader.itemID) return;
 
-        const itemInfo = ZDB.getItemInfoByAttachmentID(reader.itemID);
-        if (!itemInfo) return;
+      const itemInfo = ZDB.getItemInfoByAttachmentID(reader.itemID);
+      if (!itemInfo) return;
 
-        // Store in history storage
-        const historyStorage = HistoryStorage.getInstance();
-        historyStorage.add({ item: itemInfo });
+      // Store in history storage
+      const historyStorage = HistoryStorage.getInstance();
+      historyStorage.add({ item: itemInfo });
 
-        // Set cooldown time to prevent duplicate captures
-        if (setCooldown) {
-          this.lastCaptureTime.set(tabID, Date.now());
-        }
-
-        ztoolkit.log(`[ReadingHistory] Captured: ${itemInfo.title}`);
-
-        // Show notification only if requested
-        if (showNotification) {
-          this.showCaptureDialog(itemInfo.title, itemInfo.authors);
-        }
-      } catch (e) {
-        ztoolkit.log("[ReadingHistory] Failed to capture history:", e);
+      // Set cooldown time to prevent duplicate captures
+      if (setCooldown) {
+        this.lastCaptureTime.set(tabID, Date.now());
       }
-    }, 0);
+
+      ztoolkit.log(`[ReadingHistory] Captured: ${itemInfo.title}`);
+
+      // Show notification only if requested
+      if (showNotification) {
+        this.showCaptureDialog(itemInfo.title, itemInfo.authors);
+      }
+    } catch (e) {
+      ztoolkit.log("[ReadingHistory] Failed to capture history:", e);
+    }
   }
 
   /**
@@ -500,20 +514,10 @@ export class ReadingHistoryFactory {
    * Unregister notifier
    */
   private static unregisterNotifier() {
-    if (this.notifierID) {
-      Zotero.Notifier.unregisterObserver(this.notifierID);
-      this.notifierID = null;
+    if (this.history_notifierID) {
+      Zotero.Notifier.unregisterObserver(this.history_notifierID);
+      this.history_notifierID = null;
     }
-  }
-
-  /**
-   * Register collection change listener
-   * Automatically hide history view when user selects a different collection
-   * TODO: Implement actual collection change detection
-   */
-  private static registerCollectionChangeListener() {
-    // Stub implementation - collection change detection not yet implemented
-    // Future implementation could use Zotero.Notifier with "collection" events
   }
 
   /**

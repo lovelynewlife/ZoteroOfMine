@@ -59,6 +59,7 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   // await UIExampleFactory.registerCustomItemBoxRow();
   
   // Test Library Tab registration (disabled)
+  // ztoolkit.log("Test: Library Tab registration called");
   // UIExampleFactory.registerLibraryTabPanel();
   // ztoolkit.log("Test: Library Tab registration called");
   
