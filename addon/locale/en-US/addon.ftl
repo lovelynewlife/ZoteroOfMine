@@ -20,3 +20,6 @@ column-title = Title
 column-time = Time
 column-authors = Authors
 close-label = Close
+clear-history-label = Clear All
+clear-history-confirm = Are you sure you want to clear all reading history?
+clear-history-title = Confirm Clear

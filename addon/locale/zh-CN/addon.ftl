@@ -20,3 +20,6 @@ column-title = 标题
 column-time = 时间
 column-authors = 作者
 close-label = 关闭
+clear-history-label = 清除全部
+clear-history-confirm = 确定要清除所有阅读历史吗？
+clear-history-title = 确认清除
