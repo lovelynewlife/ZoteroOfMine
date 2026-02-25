@@ -34,6 +34,13 @@ async function startup({ id, version, resourceURI, rootURI }, reason) {
   const ctx = {
     rootURI,
   };
+  const mainWindow = Zotero.getMainWindow?.() || null;
+  if (mainWindow) {
+    ctx.window = mainWindow;
+    ctx.document = mainWindow.document;
+    ctx.ZoteroPane = mainWindow.ZoteroPane;
+    ctx.Zotero_Tabs = mainWindow.Zotero_Tabs;
+  }
   ctx._globalThis = ctx;
 
   Services.scriptloader.loadSubScript(
@@ -55,6 +62,10 @@ function shutdown({ id, version, resourceURI, rootURI }, reason) {
     return;
   }
 
+  if (!rootURI && resourceURI) {
+    rootURI = resourceURI.spec;
+  }
+
   if (typeof Zotero === "undefined") {
     Zotero = Components.classes["@zotero.org/Zotero;1"].getService(
       Components.interfaces.nsISupports,
@@ -66,7 +77,9 @@ function shutdown({ id, version, resourceURI, rootURI }, reason) {
     .getService(Components.interfaces.nsIStringBundleService)
     .flushBundles();
 
-  Cu.unload(`${rootURI}/chrome/content/scripts/__addonRef__.js`);
+  if (typeof Cu !== "undefined" && typeof Cu.unload === "function") {
+    Cu.unload(`${rootURI}/chrome/content/scripts/__addonRef__.js`);
+  }
 
   if (chromeHandle) {
     chromeHandle.destruct();

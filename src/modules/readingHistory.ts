@@ -133,117 +133,283 @@ export class ReadingHistoryFactory {
       const historyStorage = HistoryStorage.getInstance();
       await historyStorage.ensureLoaded();
       const entries = historyStorage.getAll();
+      let filteredEntries = [...entries];
+      const searchInputId = `${config.addonRef}-history-search-input`;
+      const tableBodyId = `${config.addonRef}-history-tbody`;
 
-      const dialogData: { [key: string | number]: any } = {};
+      const ensurePendingCompat = (lock: any) => {
+        // ztoolkit dialog internals expect Bluebird-style `isPending()`.
+        // Native promises don't provide it, so we shim the minimal behavior.
+        const promise = lock?.promise as any;
+        if (!promise || typeof promise.isPending === "function") return;
 
-      const setRowCellBackground = (row: HTMLElement, color: string) => {
-        row.querySelectorAll("td").forEach((cell) => {
-          (cell as HTMLElement).style.backgroundColor = color;
+        let settled = false;
+        Promise.resolve(promise).finally(() => {
+          settled = true;
         });
+
+        promise.isPending = () => !settled;
       };
 
-      const tableRows = entries.map((entry) => ({
-        tag: "tr",
-        namespace: "html",
-        attributes: { "data-item-id": String(entry.item.id) },
-        styles: { cursor: "pointer" },
-        listeners: [
-          {
-            type: "dblclick",
-            listener: (e: Event) => {
-              const row = e.currentTarget as HTMLElement;
-              const itemID = parseInt(row.getAttribute("data-item-id") || "0");
-              dialogHelper.window?.close();
-              setTimeout(() => this.openItem(itemID), 100);
-            },
-          },
-          {
-            type: "mouseenter",
-            listener: (e: Event) => {
-              setRowCellBackground(e.currentTarget as HTMLElement, "var(--fill-quinary)");
-            },
-          },
-          {
-            type: "mouseleave",
-            listener: (e: Event) => {
-              setRowCellBackground(e.currentTarget as HTMLElement, "-moz-dialog");
-            },
-          },
-        ],
-        children: [
-          {
-            tag: "td",
-            namespace: "html",
-            styles: { padding: "4px 8px", borderBottom: "1px solid var(--fill-quinary)", backgroundColor: "-moz-dialog" },
-            properties: { innerText: entry.item.title },
-          },
-          {
-            tag: "td",
-            namespace: "html",
-            styles: { padding: "4px 8px", borderBottom: "1px solid var(--fill-quinary)", backgroundColor: "-moz-dialog" },
-            properties: { innerText: entry.item.authors },
-          },
-          {
-            tag: "td",
-            namespace: "html",
-            styles: { padding: "4px 8px", borderBottom: "1px solid var(--fill-quinary)", whiteSpace: "nowrap", backgroundColor: "-moz-dialog" },
-            properties: { innerText: new Date(entry.captureTime).toLocaleString() },
-          },
-        ],
-      }));
+      const dialogData: { [key: string | number]: any } = {
+        loadCallback: () => {
+          ensurePendingCompat(dialogData.loadLock);
+          ensurePendingCompat(dialogData.unloadLock);
+          const dialogWin = dialogHelper.window;
+          if (!dialogWin) return;
+
+          const tbody = dialogWin.document.querySelector(`#${tableBodyId}`) as HTMLTableSectionElement | null;
+          const searchInput = dialogWin.document.querySelector(`#${searchInputId}`) as HTMLInputElement | null;
+          const sortState = {
+            key: "captureTime" as "title" | "authors" | "captureTime",
+            asc: false,
+          };
+
+          const setRowCellBackground = (row: HTMLElement, color: string) => {
+            row.querySelectorAll("td").forEach((cell) => {
+              (cell as HTMLElement).style.backgroundColor = color;
+            });
+          };
+
+          const renderRows = () => {
+            if (!tbody) return;
+            // Rebuild tbody from scratch after every filter/sort update.
+            // Data volume is small for history, keeping logic simple and robust.
+            while (tbody.firstChild) {
+              tbody.removeChild(tbody.firstChild);
+            }
+
+            if (filteredEntries.length === 0) {
+              const tr = dialogWin.document.createElement("tr");
+              const td = dialogWin.document.createElement("td");
+              td.colSpan = 3;
+              td.textContent = getString("no-history-yet");
+              td.style.padding = "20px";
+              td.style.textAlign = "center";
+              td.style.color = "var(--fill-secondary)";
+              td.style.backgroundColor = "-moz-dialog";
+              tr.appendChild(td);
+              tbody.appendChild(tr);
+              return;
+            }
+
+            for (const entry of filteredEntries) {
+              const tr = dialogWin.document.createElement("tr");
+              tr.style.cursor = "pointer";
+              // Double-click opens the corresponding item and closes dialog.
+              tr.addEventListener("dblclick", () => {
+                dialogHelper.window?.close();
+                setTimeout(() => this.openItem(entry.item.id), 100);
+              });
+              tr.addEventListener("mouseenter", () => {
+                setRowCellBackground(tr, "var(--fill-quinary)");
+              });
+              tr.addEventListener("mouseleave", () => {
+                setRowCellBackground(tr, "-moz-dialog");
+              });
+
+              const titleCell = dialogWin.document.createElement("td");
+              titleCell.textContent = entry.item.title;
+              titleCell.style.padding = "4px 8px";
+              titleCell.style.borderBottom = "1px solid var(--fill-quinary)";
+              titleCell.style.backgroundColor = "-moz-dialog";
+
+              const authorsCell = dialogWin.document.createElement("td");
+              authorsCell.textContent = entry.item.authors;
+              authorsCell.style.padding = "4px 8px";
+              authorsCell.style.borderBottom = "1px solid var(--fill-quinary)";
+              authorsCell.style.backgroundColor = "-moz-dialog";
+
+              const timeCell = dialogWin.document.createElement("td");
+              timeCell.textContent = new Date(entry.captureTime).toLocaleString();
+              timeCell.style.padding = "4px 8px";
+              timeCell.style.borderBottom = "1px solid var(--fill-quinary)";
+              timeCell.style.whiteSpace = "nowrap";
+              timeCell.style.backgroundColor = "-moz-dialog";
+
+              tr.appendChild(titleCell);
+              tr.appendChild(authorsCell);
+              tr.appendChild(timeCell);
+              tbody.appendChild(tr);
+            }
+          };
+
+          const applyFilterAndSort = () => {
+            // Filter first, then sort current subset for predictable UX.
+            const keyword = (searchInput?.value || "").trim().toLowerCase();
+            filteredEntries = keyword
+              ? entries.filter((entry) => {
+                  const title = (entry.item.title || "").toLowerCase();
+                  const authors = (entry.item.authors || "").toLowerCase();
+                  return title.includes(keyword) || authors.includes(keyword);
+                })
+              : [...entries];
+
+            filteredEntries.sort((a, b) => {
+              let compare = 0;
+              if (sortState.key === "captureTime") {
+                compare = a.captureTime - b.captureTime;
+              } else if (sortState.key === "title") {
+                compare = (a.item.title || "").localeCompare(b.item.title || "");
+              } else {
+                compare = (a.item.authors || "").localeCompare(b.item.authors || "");
+              }
+              return sortState.asc ? compare : -compare;
+            });
+
+            renderRows();
+          };
+
+          if (searchInput) {
+            searchInput.addEventListener("input", () => {
+              applyFilterAndSort();
+            });
+          }
+
+          const bindSort = (thId: string, key: "title" | "authors" | "captureTime") => {
+            const th = dialogWin.document.querySelector(`#${thId}`) as HTMLElement | null;
+            if (!th) return;
+            th.style.cursor = "pointer";
+            th.addEventListener("click", () => {
+              // Clicking same header toggles order; new header resets to ascending.
+              if (sortState.key === key) {
+                sortState.asc = !sortState.asc;
+              } else {
+                sortState.key = key;
+                sortState.asc = true;
+              }
+              applyFilterAndSort();
+            });
+          };
+
+          bindSort(`${config.addonRef}-sort-title`, "title");
+          bindSort(`${config.addonRef}-sort-authors`, "authors");
+          bindSort(`${config.addonRef}-sort-time`, "captureTime");
+
+          dialogWin.document.addEventListener("keydown", (event: KeyboardEvent) => {
+            if (event.key !== "Enter") return;
+            const active = dialogWin.document.activeElement as HTMLElement | null;
+            // Keep Enter in search box for text input; elsewhere open first visible row.
+            if (active?.id === searchInputId) return;
+            const firstEntry = filteredEntries[0];
+            if (!firstEntry) return;
+            dialogHelper.window?.close();
+            setTimeout(() => this.openItem(firstEntry.item.id), 100);
+          });
+
+          applyFilterAndSort();
+        },
+        unloadCallback: () => {
+          // no-op
+        },
+      };
 
       const dialogHelper = new ztoolkit.Dialog(2, 1)
         .setDialogData(dialogData)
         .addCell(0, 0, {
           tag: "div",
           namespace: "html",
-          styles: { width: "700px", height: "400px", overflow: "auto", border: "1px solid var(--fill-quinary)" },
+          styles: {
+            width: "700px",
+            height: "400px",
+            border: "1px solid var(--fill-quinary)",
+            display: "flex",
+            flexDirection: "column",
+            padding: "8px",
+            gap: "8px",
+          },
           children: [
             {
-              tag: "table",
+              tag: "input",
               namespace: "html",
-              styles: { width: "100%", borderCollapse: "separate", borderSpacing: "0", fontSize: "13px" },
+              id: searchInputId,
+              attributes: {
+                type: "search",
+                placeholder: `${getString("column-title")} / ${getString("column-authors")}`,
+                },
+              styles: {
+                width: "100%",
+                padding: "6px 8px",
+                border: "1px solid var(--fill-quinary)",
+                backgroundColor: "-moz-dialog",
+                color: "var(--fill-primary)",
+              },
+            },
+            {
+              tag: "div",
+              namespace: "html",
+              styles: {
+                flex: "1",
+                minHeight: "0",
+                overflow: "auto",
+              },
               children: [
                 {
-                  tag: "thead",
+                  tag: "table",
                   namespace: "html",
+                  styles: {
+                    width: "100%",
+                    borderCollapse: "separate",
+                    borderSpacing: "0",
+                    fontSize: "13px",
+                  },
                   children: [
                     {
-                      tag: "tr",
+                      tag: "thead",
                       namespace: "html",
-                      styles: { position: "sticky", top: "0" },
                       children: [
-                        { tag: "th", namespace: "html", styles: { padding: "8px", textAlign: "left", borderBottom: "2px solid var(--fill-tertiary)", fontWeight: "500", backgroundColor: "-moz-dialog" }, properties: { innerText: getString("column-title") } },
-                        { tag: "th", namespace: "html", styles: { padding: "8px", textAlign: "left", borderBottom: "2px solid var(--fill-tertiary)", fontWeight: "500", backgroundColor: "-moz-dialog" }, properties: { innerText: getString("column-authors") } },
-                        { tag: "th", namespace: "html", styles: { padding: "8px", textAlign: "left", borderBottom: "2px solid var(--fill-tertiary)", fontWeight: "500", backgroundColor: "-moz-dialog" }, properties: { innerText: getString("column-time") } },
+                        {
+                          tag: "tr",
+                          namespace: "html",
+                          styles: { position: "sticky", top: "0" },
+                          children: [
+                            {
+                              tag: "th",
+                              namespace: "html",
+                              id: `${config.addonRef}-sort-title`,
+                              styles: {
+                                padding: "8px",
+                                textAlign: "left",
+                                borderBottom: "2px solid var(--fill-tertiary)",
+                                fontWeight: "500",
+                                backgroundColor: "-moz-dialog",
+                              },
+                              properties: { innerText: getString("column-title") },
+                            },
+                            {
+                              tag: "th",
+                              namespace: "html",
+                              id: `${config.addonRef}-sort-authors`,
+                              styles: {
+                                padding: "8px",
+                                textAlign: "left",
+                                borderBottom: "2px solid var(--fill-tertiary)",
+                                fontWeight: "500",
+                                backgroundColor: "-moz-dialog",
+                              },
+                              properties: { innerText: getString("column-authors") },
+                            },
+                            {
+                              tag: "th",
+                              namespace: "html",
+                              id: `${config.addonRef}-sort-time`,
+                              styles: {
+                                padding: "8px",
+                                textAlign: "left",
+                                borderBottom: "2px solid var(--fill-tertiary)",
+                                fontWeight: "500",
+                                backgroundColor: "-moz-dialog",
+                              },
+                              properties: { innerText: getString("column-time") },
+                            },
+                          ],
+                        },
                       ],
                     },
-                  ],
-                },
-                {
-                  tag: "tbody",
-                  namespace: "html",
-                  children: tableRows.length > 0 ? tableRows : [
                     {
-                      tag: "tr",
+                      tag: "tbody",
                       namespace: "html",
-                      listeners: [
-                        {
-                          type: "mouseenter",
-                          listener: (e: Event) => {
-                            setRowCellBackground(e.currentTarget as HTMLElement, "var(--fill-quinary)");
-                          },
-                        },
-                        {
-                          type: "mouseleave",
-                          listener: (e: Event) => {
-                            setRowCellBackground(e.currentTarget as HTMLElement, "-moz-dialog");
-                          },
-                        },
-                      ],
-                      children: [
-                        { tag: "td", namespace: "html", attributes: { colspan: "3" }, styles: { padding: "20px", textAlign: "center", color: "var(--fill-secondary)", backgroundColor: "-moz-dialog" }, properties: { innerText: getString("no-history-yet") } },
-                      ],
+                      id: tableBodyId,
                     },
                   ],
                 },
@@ -271,6 +437,9 @@ export class ReadingHistoryFactory {
           centerscreen: true,
           resizable: true,
         });
+
+      ensurePendingCompat(dialogData.loadLock);
+      ensurePendingCompat(dialogData.unloadLock);
 
       addon.data.dialog = dialogHelper;
       await dialogData.unloadLock.promise;
