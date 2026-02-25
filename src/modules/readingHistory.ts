@@ -11,7 +11,7 @@ import { HistoryStorage } from "./historyStore";
 export class ReadingHistoryFactory {
   private static history_notifierID: string | null = null;
   private static lastCaptureTime: Map<string, number> = new Map();
-  private static readonly CAPTURE_COOLDOWN_MS = 10000; // 10 seconds
+  private static readonly CAPTURE_COOLDOWN_MS = 10000;
   private static historyRowId = `${config.addonRef}-history-row`;
   private static historyRowElement: HTMLElement | null = null;
 
@@ -121,7 +121,6 @@ export class ReadingHistoryFactory {
       }
     }
 
-    // Fallback: insert after #zotero-collections-pane
     const collectionsPane = doc.querySelector("#zotero-collections-pane") as HTMLElement;
     if (collectionsPane?.parentElement) {
       collectionsPane.insertAdjacentElement("afterend", historyRow);
@@ -136,6 +135,12 @@ export class ReadingHistoryFactory {
       const entries = historyStorage.getAll();
 
       const dialogData: { [key: string | number]: any } = {};
+
+      const setRowCellBackground = (row: HTMLElement, color: string) => {
+        row.querySelectorAll("td").forEach((cell) => {
+          (cell as HTMLElement).style.backgroundColor = color;
+        });
+      };
 
       const tableRows = entries.map((entry) => ({
         tag: "tr",
@@ -155,13 +160,13 @@ export class ReadingHistoryFactory {
           {
             type: "mouseenter",
             listener: (e: Event) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = "var(--fill-quinary)";
+              setRowCellBackground(e.currentTarget as HTMLElement, "var(--fill-quinary)");
             },
           },
           {
             type: "mouseleave",
             listener: (e: Event) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = "";
+              setRowCellBackground(e.currentTarget as HTMLElement, "-moz-dialog");
             },
           },
         ],
@@ -222,8 +227,22 @@ export class ReadingHistoryFactory {
                     {
                       tag: "tr",
                       namespace: "html",
+                      listeners: [
+                        {
+                          type: "mouseenter",
+                          listener: (e: Event) => {
+                            setRowCellBackground(e.currentTarget as HTMLElement, "var(--fill-quinary)");
+                          },
+                        },
+                        {
+                          type: "mouseleave",
+                          listener: (e: Event) => {
+                            setRowCellBackground(e.currentTarget as HTMLElement, "-moz-dialog");
+                          },
+                        },
+                      ],
                       children: [
-                        { tag: "td", namespace: "html", attributes: { colspan: "3" }, styles: { padding: "20px", textAlign: "center", color: "var(--fill-secondary)" }, properties: { innerText: getString("no-history-yet") } },
+                        { tag: "td", namespace: "html", attributes: { colspan: "3" }, styles: { padding: "20px", textAlign: "center", color: "var(--fill-secondary)", backgroundColor: "-moz-dialog" }, properties: { innerText: getString("no-history-yet") } },
                       ],
                     },
                   ],
