@@ -526,20 +526,10 @@ export class ReadingHistoryFactory {
       if (!itemInfo) return;
 
       HistoryStorage.getInstance().add({ item: itemInfo });
-      this.showCaptureDialog(itemInfo.title, itemInfo.authors);
+      ztoolkit.log(`[ReadingHistory] Captured: ${itemInfo.title}`);
     } catch (e) {
       ztoolkit.log("[ReadingHistory] Capture failed:", e);
     }
-  }
-
-  private static showCaptureDialog(title: string, authors: string) {
-    new ztoolkit.ProgressWindow(getString("capture-history-title"), {
-      closeOnClick: true,
-      closeTime: 5000,
-    })
-      .createLine({ text: `${getString("capture-history-title-label")} ${title}`, type: "default", progress: 100 })
-      .createLine({ text: `${getString("capture-history-authors-label")} ${authors}`, type: "default", progress: 100 })
-      .show();
   }
 
   private static unregisterNotifier() {
