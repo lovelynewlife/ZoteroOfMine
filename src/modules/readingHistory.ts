@@ -425,8 +425,9 @@ export class ReadingHistoryFactory {
               getString("clear-history-confirm")
             );
             if (confirmed) {
-              historyStorage.clear();
-              dialogHelper.window?.close();
+              historyStorage.clear().then(() => {
+                dialogHelper.window?.close();
+              });
             }
           }
         })
@@ -478,7 +479,7 @@ export class ReadingHistoryFactory {
       notify: async (event: string, type: string, ids: Array<string | number>, extraData: { [key: string]: any }) => {
         if (!addon?.data.alive) return;
         try {
-          this.onHistoryRecording(event, type, ids, extraData);
+          await this.onHistoryRecording(event, type, ids, extraData);
         } catch (e) {
           ztoolkit.log("[ReadingHistory] Notifier failed:", e);
         }
@@ -489,7 +490,7 @@ export class ReadingHistoryFactory {
     window.addEventListener("unload", () => this.unregisterNotifier(), false);
   }
 
-  private static onHistoryRecording(event: string, type: string, ids: Array<string | number>, extraData: { [key: string]: any }) {
+  private static async onHistoryRecording(event: string, type: string, ids: Array<string | number>, extraData: { [key: string]: any }) {
     if (type !== "tab") return;
     if (event !== "load" && event !== "select" && event !== "add") return;
 
@@ -502,7 +503,7 @@ export class ReadingHistoryFactory {
     if (!tabData || tabData.type !== "reader") return;
     if (!this.shouldCapture(tabID)) return;
 
-    this.captureReadingHistory(tabID);
+    await this.captureReadingHistory(tabID);
   }
 
   private static shouldCapture(tabID: string): boolean {
@@ -517,7 +518,7 @@ export class ReadingHistoryFactory {
     return true;
   }
 
-  private static captureReadingHistory(tabID: string) {
+  private static async captureReadingHistory(tabID: string) {
     try {
       const reader = Zotero.Reader.getByTabID(tabID);
       if (!reader || !reader.itemID) return;
@@ -525,7 +526,7 @@ export class ReadingHistoryFactory {
       const itemInfo = ZDB.getItemInfoByAttachmentID(reader.itemID);
       if (!itemInfo) return;
 
-      HistoryStorage.getInstance().add({ item: itemInfo });
+      await HistoryStorage.getInstance().add({ item: itemInfo });
       ztoolkit.log(`[ReadingHistory] Captured: ${itemInfo.title}`);
     } catch (e) {
       ztoolkit.log("[ReadingHistory] Capture failed:", e);

@@ -62,7 +62,7 @@ export class HistoryStorage {
     return this.jsonFilePath;
   }
 
-  add(entry: NewHistoryEntry): ReadingHistoryEntry {
+  async add(entry: NewHistoryEntry): Promise<ReadingHistoryEntry> {
     const itemID = entry.item.id;
     const captureTime = Date.now();
     const id = this.generateId(itemID, captureTime);
@@ -80,7 +80,7 @@ export class HistoryStorage {
     this.entriesMap.set(id, newEntry);
     this.entriesByItemID.set(itemID, newEntry);
 
-    this.saveToJSON();
+    await this.saveToJSON();
 
     return newEntry;
   }
@@ -97,11 +97,11 @@ export class HistoryStorage {
     return this.entriesByItemID.get(itemID);
   }
 
-  clear(): void {
+  async clear(): Promise<void> {
     this.entriesArray = [];
     this.entriesMap.clear();
     this.entriesByItemID.clear();
-    this.clearJSONFile();
+    await this.clearJSONFile();
   }
 
   getCount(): number {
@@ -112,7 +112,7 @@ export class HistoryStorage {
   // JSON Storage Methods
   // ========================================
 
-  private saveToJSON(): void {
+  private async saveToJSON(): Promise<void> {
     try {
       const filePath = this.getJSONFilePath();
       
@@ -124,9 +124,7 @@ export class HistoryStorage {
         })),
       };
 
-      IOUtils.writeUTF8(filePath, JSON.stringify(data, null, 2)).catch(e => {
-        ztoolkit.log("[HistoryStorage] Save failed:", e);
-      });
+      await IOUtils.writeUTF8(filePath, JSON.stringify(data, null, 2));
     } catch (e) {
       ztoolkit.log("[HistoryStorage] Save failed:", e);
     }
@@ -140,13 +138,19 @@ export class HistoryStorage {
         return;
       }
 
+      // Read file first before clearing memory
       const jsonString = await IOUtils.readUTF8(filePath);
       const data: HistoryJSONFile = JSON.parse(jsonString as string);
 
       if (!data.entries || !Array.isArray(data.entries)) {
+        ztoolkit.log("[HistoryStorage] Invalid file format");
         return;
       }
 
+      // Save backup before clearing
+      const backupEntries = [...this.entriesArray];
+
+      // Clear memory and reload from file
       this.entriesArray = [];
       this.entriesMap.clear();
       this.entriesByItemID.clear();
@@ -174,8 +178,19 @@ export class HistoryStorage {
       }
 
       this.entriesArray.sort((a, b) => b.captureTime - a.captureTime);
+
+      // If file had invalid data and memory ended up empty, restore backup
+      if (this.entriesArray.length === 0 && backupEntries.length > 0) {
+        ztoolkit.log("[HistoryStorage] Restoring backup - file had no valid entries");
+        for (const entry of backupEntries) {
+          this.entriesArray.push(entry);
+          this.entriesMap.set(entry.id, entry);
+          this.entriesByItemID.set(entry.item.id, entry);
+        }
+      }
     } catch (e) {
       ztoolkit.log("[HistoryStorage] Load failed:", e);
+      // If loading fails, keep existing memory data intact
     }
   }
 
@@ -183,16 +198,14 @@ export class HistoryStorage {
     await this.loadFromJSON();
   }
 
-  private clearJSONFile(): void {
+  private async clearJSONFile(): Promise<void> {
     try {
       const filePath = this.getJSONFilePath();
       const data: HistoryJSONFile = {
         version: HistoryStorage.JSON_VERSION,
         entries: [],
       };
-      IOUtils.writeUTF8(filePath, JSON.stringify(data, null, 2)).catch(e => {
-        ztoolkit.log("[HistoryStorage] Clear failed:", e);
-      });
+      await IOUtils.writeUTF8(filePath, JSON.stringify(data, null, 2));
     } catch (e) {
       ztoolkit.log("[HistoryStorage] Clear failed:", e);
     }
