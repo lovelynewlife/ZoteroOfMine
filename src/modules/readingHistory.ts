@@ -402,11 +402,151 @@ export class ReadingHistoryFactory {
             }
           };
 
+          // Initialize delete by time buttons
+          const initDeleteByTimeButtons = () => {
+            ztoolkit.log("[ReadingHistory] initDeleteByTimeButtons called");
+            const periods = [
+              { id: "day", value: "day" },
+              { id: "week", value: "week" },
+              { id: "month", value: "month" },
+              { id: "quarter", value: "quarter" },
+              { id: "half-year", value: "half-year" },
+              { id: "year", value: "year" },
+            ];
+            
+            periods.forEach(({ id, value }) => {
+              const buttonId = `${config.addonRef}-delete-by-time-${id}`;
+              const button = dialogWin.document.getElementById(buttonId) as HTMLButtonElement | null;
+              if (!button) {
+                ztoolkit.log(`[ReadingHistory] Button ${buttonId} not found`);
+                return;
+              }
+              
+              // Check if listener already attached to avoid duplicates
+              if ((button as any).__listenerAttached) {
+                ztoolkit.log(`[ReadingHistory] Button ${buttonId} already has listener, skipping`);
+                return;
+              }
+              
+              (button as any).__listenerAttached = true;
+              ztoolkit.log(`[ReadingHistory] Button ${buttonId} found, adding listener`);
+              
+              button.addEventListener("click", async () => {
+                ztoolkit.log(`[ReadingHistory] Delete by time button clicked for period: ${value}`);
+                
+                const periodTranslations: Record<string, string> = {
+                  "day": getString("time-period-day"),
+                  "week": getString("time-period-week"),
+                  "month": getString("time-period-month"),
+                  "quarter": getString("time-period-quarter"),
+                  "half-year": getString("time-period-half-year"),
+                  "year": getString("time-period-year"),
+                };
+                
+                const translatedPeriod = periodTranslations[value] || value;
+                ztoolkit.log("[ReadingHistory] Period:", value);
+                ztoolkit.log("[ReadingHistory] Translated period:", translatedPeriod);
+                
+                // Calculate threshold time
+                const now = Date.now();
+                const timeThresholds: Record<string, number> = {
+                  "day": 24 * 60 * 60 * 1000,
+                  "week": 7 * 24 * 60 * 60 * 1000,
+                  "month": 30 * 24 * 60 * 60 * 1000,
+                  "quarter": 90 * 24 * 60 * 60 * 1000,
+                  "half-year": 180 * 24 * 60 * 60 * 1000,
+                  "year": 365 * 24 * 60 * 60 * 1000,
+                };
+                const thresholdMs = timeThresholds[value] || timeThresholds["week"];
+                const thresholdTime = now - thresholdMs;
+                
+                // Get original message and try replacement
+                const originalConfirmMessage = getString("delete-by-time-confirm");
+                ztoolkit.log("[ReadingHistory] Original confirm message:", originalConfirmMessage);
+                
+                // Try different replacement patterns (try without space first)
+                let confirmMessage = originalConfirmMessage;
+                confirmMessage = confirmMessage.replace("{$period}", translatedPeriod);
+                confirmMessage = confirmMessage.replace("{ $period }", translatedPeriod);
+                confirmMessage = confirmMessage.replace("{ $period}", translatedPeriod);
+                
+                ztoolkit.log("[ReadingHistory] Final confirm message:", confirmMessage);
+                
+                const confirmed = Services.prompt.confirm(
+                  dialogWin,
+                  getString("delete-by-time-title"),
+                  confirmMessage
+                );
+                
+                ztoolkit.log("[ReadingHistory] Confirmed:", confirmed);
+                
+                if (confirmed) {
+                  // Delete entries older than threshold
+                  const entriesToDelete = filteredEntries.filter(
+                    (entry) => entry.captureTime < thresholdTime
+                  );
+                  ztoolkit.log("[ReadingHistory] Entries to delete:", entriesToDelete.length);
+                  
+                  if (entriesToDelete.length > 0) {
+                    const itemIdsToDelete = entriesToDelete.map((e) => e.item.id);
+                    ztoolkit.log("[ReadingHistory] Deleting item IDs:", itemIdsToDelete);
+                    
+                    // Delete all entries
+                    for (const itemId of itemIdsToDelete) {
+                      await historyStorage.deleteByItemID(itemId);
+                    }
+                    
+                    // Update filtered entries
+                    filteredEntries = filteredEntries.filter(
+                      (entry) => !itemIdsToDelete.includes(entry.item.id)
+                    );
+                    
+                    // Re-render
+                    renderRows();
+                    
+                    // Show success message
+                    const originalSuccessMessage = getString("delete-by-time-success");
+                    ztoolkit.log("[ReadingHistory] Original success message:", originalSuccessMessage);
+                    ztoolkit.log("[ReadingHistory] Entries deleted count:", entriesToDelete.length);
+                    
+                    let successMessage = originalSuccessMessage;
+                    // Replace count first
+                    successMessage = successMessage.replace("{$count}", String(entriesToDelete.length));
+                    successMessage = successMessage.replace("{ $count }", String(entriesToDelete.length));
+                    successMessage = successMessage.replace("{ $count}", String(entriesToDelete.length));
+                    // Then replace period
+                    successMessage = successMessage.replace("{$period}", translatedPeriod);
+                    successMessage = successMessage.replace("{ $period }", translatedPeriod);
+                    successMessage = successMessage.replace("{ $period}", translatedPeriod);
+                    
+                    ztoolkit.log("[ReadingHistory] Final success message:", successMessage);
+                    
+                    new ztoolkit.ProgressWindow(config.addonName)
+                      .createLine({
+                        text: successMessage,
+                        type: "success",
+                        progress: 100,
+                      })
+                      .show();
+                  } else {
+                    ztoolkit.log("[ReadingHistory] No entries to delete");
+                  }
+                }
+              });
+            });
+          };
+
           // Try to find button with delays
           initDeleteButtonState();
           setTimeout(initDeleteButtonState, 100);
           setTimeout(initDeleteButtonState, 300);
           setTimeout(initDeleteButtonState, 500);
+          
+          // Initialize delete by time buttons
+          initDeleteByTimeButtons();
+          setTimeout(initDeleteByTimeButtons, 100);
+          setTimeout(initDeleteByTimeButtons, 300);
+          setTimeout(initDeleteByTimeButtons, 500);
         },
         unloadCallback: () => {
           // no-op
@@ -443,6 +583,128 @@ export class ReadingHistoryFactory {
                 backgroundColor: "-moz-dialog",
                 color: "var(--fill-primary)",
               },
+            },
+            {
+              tag: "div",
+              namespace: "html",
+              styles: {
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              },
+              children: [
+                {
+                  tag: "div",
+                  namespace: "html",
+                  styles: {
+                    fontSize: "13px",
+                    fontWeight: "bold",
+                    whiteSpace: "nowrap",
+                  },
+                  properties: { innerText: getString("delete-by-time-label") },
+                },
+                {
+                  tag: "div",
+                  namespace: "html",
+                  styles: {
+                    display: "flex",
+                    gap: "4px",
+                    flexWrap: "wrap",
+                  },
+                  children: [
+                    {
+                      tag: "button",
+                      namespace: "html",
+                      id: `${config.addonRef}-delete-by-time-day`,
+                      styles: {
+                        padding: "4px 8px",
+                        border: "1px solid var(--fill-quinary)",
+                        backgroundColor: "-moz-dialog",
+                        color: "var(--fill-primary)",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      },
+                      properties: { innerText: getString("time-period-day") },
+                    },
+                    {
+                      tag: "button",
+                      namespace: "html",
+                      id: `${config.addonRef}-delete-by-time-week`,
+                      styles: {
+                        padding: "4px 8px",
+                        border: "1px solid var(--fill-quinary)",
+                        backgroundColor: "-moz-dialog",
+                        color: "var(--fill-primary)",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      },
+                      properties: { innerText: getString("time-period-week") },
+                    },
+                    {
+                      tag: "button",
+                      namespace: "html",
+                      id: `${config.addonRef}-delete-by-time-month`,
+                      styles: {
+                        padding: "4px 8px",
+                        border: "1px solid var(--fill-quinary)",
+                        backgroundColor: "-moz-dialog",
+                        color: "var(--fill-primary)",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      },
+                      properties: { innerText: getString("time-period-month") },
+                    },
+                    {
+                      tag: "button",
+                      namespace: "html",
+                      id: `${config.addonRef}-delete-by-time-quarter`,
+                      styles: {
+                        padding: "4px 8px",
+                        border: "1px solid var(--fill-quinary)",
+                        backgroundColor: "-moz-dialog",
+                        color: "var(--fill-primary)",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      },
+                      properties: { innerText: getString("time-period-quarter") },
+                    },
+                    {
+                      tag: "button",
+                      namespace: "html",
+                      id: `${config.addonRef}-delete-by-time-half-year`,
+                      styles: {
+                        padding: "4px 8px",
+                        border: "1px solid var(--fill-quinary)",
+                        backgroundColor: "-moz-dialog",
+                        color: "var(--fill-primary)",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      },
+                      properties: { innerText: getString("time-period-half-year") },
+                    },
+                    {
+                      tag: "button",
+                      namespace: "html",
+                      id: `${config.addonRef}-delete-by-time-year`,
+                      styles: {
+                        padding: "4px 8px",
+                        border: "1px solid var(--fill-quinary)",
+                        backgroundColor: "-moz-dialog",
+                        color: "var(--fill-primary)",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      },
+                      properties: { innerText: getString("time-period-year") },
+                    },
+                  ],
+                },
+              ],
             },
             {
               tag: "div",
@@ -548,6 +810,7 @@ export class ReadingHistoryFactory {
           ],
         })
         .addButton(getString("delete-selected-label"), "delete-selected", {
+          noClose: true,
           callback: async () => {
             const selectedItems = ReadingHistoryFactory.dialogSelectedItems;
             if (!selectedItems) return false;
@@ -699,7 +962,7 @@ export class ReadingHistoryFactory {
                         progress: 100,
                       })
                       .show();
-                    return;
+                    return false;
                   }
                 }
               }
@@ -709,6 +972,7 @@ export class ReadingHistoryFactory {
           }
         })
         .addButton(getString("clear-history-label"), "clear-all", {
+          noClose: true,
           callback: () => {
             const confirmed = Services.prompt.confirm(
               dialogHelper.window,
@@ -717,7 +981,25 @@ export class ReadingHistoryFactory {
             );
             if (confirmed) {
               historyStorage.clear().then(() => {
-                dialogHelper.window?.close();
+                // Clear all entries from the table
+                const tbody = dialogHelper.window.document.querySelector(`#${tableBodyId}`) as HTMLTableSectionElement | null;
+                if (tbody) {
+                  while (tbody.firstChild) {
+                    tbody.removeChild(tbody.firstChild);
+                  }
+                  // Show empty message
+                  const tr = dialogHelper.window.document.createElement("tr");
+                  const td = dialogHelper.window.document.createElement("td");
+                  td.colSpan = 4;
+                  td.textContent = getString("no-history-yet");
+                  td.style.padding = "20px";
+                  td.style.textAlign = "center";
+                  td.style.color = "var(--fill-secondary)";
+                  td.style.backgroundColor = "-moz-dialog";
+                  tr.appendChild(td);
+                  tbody.appendChild(tr);
+                }
+                
                 new ztoolkit.ProgressWindow(config.addonName)
                   .createLine({
                     text: getString("clear-success-message"),
@@ -727,6 +1009,7 @@ export class ReadingHistoryFactory {
                   .show();
               });
             }
+            return false;
           }
         })
         .addButton(getString("close-label") || "Close", "close")

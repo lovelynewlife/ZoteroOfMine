@@ -9,6 +9,7 @@
  */
 
 import { ItemInfo, ZDB } from "../utils/zdb";
+import { generateMockHistoryData, getMockItemIDs } from "../utils/mockHistory";
 
 /**
  * Persistent entry stored in JSON file
@@ -223,5 +224,50 @@ export class HistoryStorage {
     } catch (e) {
       ztoolkit.log("[HistoryStorage] Clear failed:", e);
     }
+  }
+
+  // ========================================
+  // Testing Methods
+  // ========================================
+
+  /**
+   * Add mock data for testing purposes
+   * Creates entries with different time ranges to test time-based deletion
+   */
+  async addMockDataForTesting(): Promise<void> {
+    const now = Date.now();
+    const { entries: mockEntries, timeOffsets } = generateMockHistoryData();
+
+    for (let i = 0; i < mockEntries.length; i++) {
+      const entry = mockEntries[i];
+      const captureTime = now - timeOffsets[i];
+      const id = this.generateId(entry.item.id, captureTime);
+      const historyEntry: ReadingHistoryEntry = { ...entry, id, captureTime };
+
+      this.entriesArray.unshift(historyEntry);
+      this.entriesMap.set(id, historyEntry);
+      this.entriesByItemID.set(entry.item.id, historyEntry);
+    }
+
+    // Sort by capture time (newest first)
+    this.entriesArray.sort((a, b) => b.captureTime - a.captureTime);
+
+    await this.saveToJSON();
+
+    ztoolkit.log("[HistoryStorage] Added 8 mock entries for testing");
+  }
+
+  /**
+   * Remove mock data added for testing
+   * Removes all entries with mock IDs
+   */
+  async removeMockData(): Promise<void> {
+    const mockItemIDs = getMockItemIDs();
+    
+    for (const itemID of mockItemIDs) {
+      await this.deleteByItemID(itemID);
+    }
+
+    ztoolkit.log("[HistoryStorage] Removed mock entries");
   }
 }

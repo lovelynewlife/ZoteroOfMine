@@ -6,6 +6,7 @@ import {
   UIExampleFactory,
 } from "./modules/examples";
 import { ReadingHistoryFactory } from "./modules/readingHistory";
+import { HistoryStorage } from "./modules/historyStore";
 import { config } from "../package.json";
 import { getString, initLocale } from "./utils/locale";
 import { registerPrefsScripts } from "./modules/preferenceScript";
@@ -77,6 +78,13 @@ async function onMainWindowLoad(win: Window): Promise<void> {
 
   // === Reading History Feature ===
   ReadingHistoryFactory.register();
+
+  // Add mock data for testing (only if no real data exists)
+  // const storage = HistoryStorage.getInstance();
+  // await storage.ensureLoaded();
+  // if (storage.getCount() === 0) {
+  //   await storage.addMockDataForTesting();
+  // }
 
   /*await Zotero.Promise.delay(1000);
 
