@@ -97,6 +97,20 @@ export class HistoryStorage {
     return this.entriesByItemID.get(itemID);
   }
 
+  async deleteByItemID(itemID: number): Promise<boolean> {
+    const entry = this.entriesByItemID.get(itemID);
+    if (!entry) {
+      return false;
+    }
+
+    this.entriesArray = this.entriesArray.filter(e => e.item.id !== itemID);
+    this.entriesMap.delete(entry.id);
+    this.entriesByItemID.delete(itemID);
+
+    await this.saveToJSON();
+    return true;
+  }
+
   async clear(): Promise<void> {
     this.entriesArray = [];
     this.entriesMap.clear();

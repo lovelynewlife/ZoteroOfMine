@@ -6,7 +6,7 @@
 import { config } from "../../package.json";
 import { getString } from "../utils/locale";
 import { ZDB } from "../utils/zdb";
-import { HistoryStorage } from "./historyStore";
+import { HistoryStorage, ReadingHistoryEntry } from "./historyStore";
 
 export class ReadingHistoryFactory {
   private static history_notifierID: string | null = null;
@@ -14,6 +14,12 @@ export class ReadingHistoryFactory {
   private static readonly CAPTURE_COOLDOWN_MS = 10000;
   private static historyRowId = `${config.addonRef}-history-row`;
   private static historyRowElement: HTMLElement | null = null;
+  
+  // Shared state for dialog callbacks
+  private static dialogSelectedItems: Set<number> | null = null;
+  private static dialogFilteredEntries: ReadingHistoryEntry[] | null = null;
+  private static dialogHistoryStorage: HistoryStorage | null = null;
+  private static dialogDialogHelper: any = null;
 
   static async register() {
     this.registerNotifier();
@@ -133,9 +139,9 @@ export class ReadingHistoryFactory {
       const historyStorage = HistoryStorage.getInstance();
       await historyStorage.ensureLoaded();
       const entries = historyStorage.getAll();
-      let filteredEntries = [...entries];
       const searchInputId = `${config.addonRef}-history-search-input`;
       const tableBodyId = `${config.addonRef}-history-tbody`;
+      const selectAllCheckboxId = `${config.addonRef}-select-all-checkbox`;
 
       const ensurePendingCompat = (lock: any) => {
         // ztoolkit dialog internals expect Bluebird-style `isPending()`.
@@ -160,21 +166,118 @@ export class ReadingHistoryFactory {
 
           const tbody = dialogWin.document.querySelector(`#${tableBodyId}`) as HTMLTableSectionElement | null;
           const searchInput = dialogWin.document.querySelector(`#${searchInputId}`) as HTMLInputElement | null;
+          
+          if (!tbody) return;
+
+          // Sort state
           const sortState = {
             key: "captureTime" as "title" | "authors" | "captureTime",
             asc: false,
           };
 
+          // Initialize shared state for callbacks
+          ReadingHistoryFactory.dialogSelectedItems = new Set<number>();
+          ReadingHistoryFactory.dialogFilteredEntries = [...entries];
+          ReadingHistoryFactory.dialogHistoryStorage = historyStorage;
+          ReadingHistoryFactory.dialogDialogHelper = dialogHelper;
+
+          const selectedItems = ReadingHistoryFactory.dialogSelectedItems!;
+          let filteredEntries = [...entries];
+          
+          // Helper functions
           const setRowCellBackground = (row: HTMLElement, color: string) => {
             row.querySelectorAll("td").forEach((cell) => {
               (cell as HTMLElement).style.backgroundColor = color;
             });
           };
 
+          const updateDeleteButtonState = () => {
+            const deleteLabel = getString("delete-selected-label");
+            const selectors = ["button", ".dialog-button-box button"];
+            for (const selector of selectors) {
+              const allButtons = dialogWin.document.querySelectorAll(selector) as NodeListOf<HTMLButtonElement>;
+              for (const btn of allButtons) {
+                if (btn.textContent?.trim().includes(deleteLabel)) {
+                  btn.disabled = selectedItems.size === 0;
+                  return;
+                }
+              }
+            }
+          };
+
+          const updateSelectAllState = () => {
+            const selectAllCheckbox = dialogWin.document.querySelector(`#${selectAllCheckboxId}`) as HTMLInputElement | null;
+            if (!selectAllCheckbox) return;
+            const allSelected = filteredEntries.length > 0 && filteredEntries.every(entry => selectedItems.has(entry.item.id));
+            selectAllCheckbox.checked = allSelected;
+            selectAllCheckbox.indeterminate = !allSelected && selectedItems.size > 0;
+          };
+
+          const renderRow = (entry: ReadingHistoryEntry): HTMLTableRowElement => {
+            const tr = dialogWin.document.createElement("tr");
+            tr.style.cursor = "pointer";
+            tr.dataset.itemId = String(entry.item.id);
+            
+            // Double-click opens the corresponding item and closes dialog
+            tr.addEventListener("dblclick", () => {
+              dialogHelper.window?.close();
+              setTimeout(() => this.openItem(entry.item.id), 100);
+            });
+            tr.addEventListener("mouseenter", () => setRowCellBackground(tr, "var(--fill-quinary)"));
+            tr.addEventListener("mouseleave", () => setRowCellBackground(tr, "-moz-dialog"));
+
+            // Checkbox cell
+            const checkboxCell = dialogWin.document.createElement("td");
+            checkboxCell.style.padding = "4px 8px";
+            checkboxCell.style.borderBottom = "1px solid var(--fill-quinary)";
+            checkboxCell.style.backgroundColor = "-moz-dialog";
+            checkboxCell.style.width = "40px";
+
+            const checkbox = dialogWin.document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = selectedItems.has(entry.item.id);
+            checkbox.addEventListener("change", () => {
+              if (checkbox.checked) {
+                selectedItems.add(entry.item.id);
+              } else {
+                selectedItems.delete(entry.item.id);
+              }
+              updateDeleteButtonState();
+              updateSelectAllState();
+            });
+            checkbox.addEventListener("click", (e) => e.stopPropagation());
+            checkboxCell.appendChild(checkbox);
+            tr.appendChild(checkboxCell);
+
+            // Title cell
+            const titleCell = dialogWin.document.createElement("td");
+            titleCell.textContent = entry.item.title;
+            titleCell.style.padding = "4px 8px";
+            titleCell.style.borderBottom = "1px solid var(--fill-quinary)";
+            titleCell.style.backgroundColor = "-moz-dialog";
+            tr.appendChild(titleCell);
+
+            // Authors cell
+            const authorsCell = dialogWin.document.createElement("td");
+            authorsCell.textContent = entry.item.authors;
+            authorsCell.style.padding = "4px 8px";
+            authorsCell.style.borderBottom = "1px solid var(--fill-quinary)";
+            authorsCell.style.backgroundColor = "-moz-dialog";
+            tr.appendChild(authorsCell);
+
+            // Time cell
+            const timeCell = dialogWin.document.createElement("td");
+            timeCell.textContent = new Date(entry.captureTime).toLocaleString();
+            timeCell.style.padding = "4px 8px";
+            timeCell.style.borderBottom = "1px solid var(--fill-quinary)";
+            timeCell.style.whiteSpace = "nowrap";
+            timeCell.style.backgroundColor = "-moz-dialog";
+            tr.appendChild(timeCell);
+
+            return tr;
+          };
+
           const renderRows = () => {
-            if (!tbody) return;
-            // Rebuild tbody from scratch after every filter/sort update.
-            // Data volume is small for history, keeping logic simple and robust.
             while (tbody.firstChild) {
               tbody.removeChild(tbody.firstChild);
             }
@@ -182,7 +285,7 @@ export class ReadingHistoryFactory {
             if (filteredEntries.length === 0) {
               const tr = dialogWin.document.createElement("tr");
               const td = dialogWin.document.createElement("td");
-              td.colSpan = 3;
+              td.colSpan = 4;
               td.textContent = getString("no-history-yet");
               td.style.padding = "20px";
               td.style.textAlign = "center";
@@ -194,48 +297,14 @@ export class ReadingHistoryFactory {
             }
 
             for (const entry of filteredEntries) {
-              const tr = dialogWin.document.createElement("tr");
-              tr.style.cursor = "pointer";
-              // Double-click opens the corresponding item and closes dialog.
-              tr.addEventListener("dblclick", () => {
-                dialogHelper.window?.close();
-                setTimeout(() => this.openItem(entry.item.id), 100);
-              });
-              tr.addEventListener("mouseenter", () => {
-                setRowCellBackground(tr, "var(--fill-quinary)");
-              });
-              tr.addEventListener("mouseleave", () => {
-                setRowCellBackground(tr, "-moz-dialog");
-              });
-
-              const titleCell = dialogWin.document.createElement("td");
-              titleCell.textContent = entry.item.title;
-              titleCell.style.padding = "4px 8px";
-              titleCell.style.borderBottom = "1px solid var(--fill-quinary)";
-              titleCell.style.backgroundColor = "-moz-dialog";
-
-              const authorsCell = dialogWin.document.createElement("td");
-              authorsCell.textContent = entry.item.authors;
-              authorsCell.style.padding = "4px 8px";
-              authorsCell.style.borderBottom = "1px solid var(--fill-quinary)";
-              authorsCell.style.backgroundColor = "-moz-dialog";
-
-              const timeCell = dialogWin.document.createElement("td");
-              timeCell.textContent = new Date(entry.captureTime).toLocaleString();
-              timeCell.style.padding = "4px 8px";
-              timeCell.style.borderBottom = "1px solid var(--fill-quinary)";
-              timeCell.style.whiteSpace = "nowrap";
-              timeCell.style.backgroundColor = "-moz-dialog";
-
-              tr.appendChild(titleCell);
-              tr.appendChild(authorsCell);
-              tr.appendChild(timeCell);
-              tbody.appendChild(tr);
+              tbody.appendChild(renderRow(entry));
             }
+
+            updateSelectAllState();
           };
 
           const applyFilterAndSort = () => {
-            // Filter first, then sort current subset for predictable UX.
+            // Filter
             const keyword = (searchInput?.value || "").trim().toLowerCase();
             filteredEntries = keyword
               ? entries.filter((entry) => {
@@ -245,6 +314,7 @@ export class ReadingHistoryFactory {
                 })
               : [...entries];
 
+            // Sort
             filteredEntries.sort((a, b) => {
               let compare = 0;
               if (sortState.key === "captureTime") {
@@ -257,21 +327,23 @@ export class ReadingHistoryFactory {
               return sortState.asc ? compare : -compare;
             });
 
+            // Clear selection when filter/sort changes
+            selectedItems.clear();
+            updateDeleteButtonState();
             renderRows();
           };
 
+          // Search input
           if (searchInput) {
-            searchInput.addEventListener("input", () => {
-              applyFilterAndSort();
-            });
+            searchInput.addEventListener("input", applyFilterAndSort);
           }
 
+          // Sort headers
           const bindSort = (thId: string, key: "title" | "authors" | "captureTime") => {
             const th = dialogWin.document.querySelector(`#${thId}`) as HTMLElement | null;
             if (!th) return;
             th.style.cursor = "pointer";
             th.addEventListener("click", () => {
-              // Clicking same header toggles order; new header resets to ascending.
               if (sortState.key === key) {
                 sortState.asc = !sortState.asc;
               } else {
@@ -286,10 +358,25 @@ export class ReadingHistoryFactory {
           bindSort(`${config.addonRef}-sort-authors`, "authors");
           bindSort(`${config.addonRef}-sort-time`, "captureTime");
 
+          // Select all checkbox
+          const selectAllCheckbox = dialogWin.document.querySelector(`#${selectAllCheckboxId}`) as HTMLInputElement | null;
+          if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener("change", (e) => {
+              const checked = (e.target as HTMLInputElement).checked;
+              if (checked) {
+                filteredEntries.forEach(entry => selectedItems.add(entry.item.id));
+              } else {
+                selectedItems.clear();
+              }
+              updateDeleteButtonState();
+              renderRows();
+            });
+          }
+
+          // Enter key handling
           dialogWin.document.addEventListener("keydown", (event: KeyboardEvent) => {
             if (event.key !== "Enter") return;
             const active = dialogWin.document.activeElement as HTMLElement | null;
-            // Keep Enter in search box for text input; elsewhere open first visible row.
             if (active?.id === searchInputId) return;
             const firstEntry = filteredEntries[0];
             if (!firstEntry) return;
@@ -297,7 +384,29 @@ export class ReadingHistoryFactory {
             setTimeout(() => this.openItem(firstEntry.item.id), 100);
           });
 
+          // Initial render
           applyFilterAndSort();
+
+          // Initialize delete button state after dialog is fully loaded
+          const deleteLabel = getString("delete-selected-label");
+          const initDeleteButtonState = () => {
+            const selectors = ["button", ".dialog-button-box button"];
+            for (const selector of selectors) {
+              const allButtons = dialogWin.document.querySelectorAll(selector) as NodeListOf<HTMLButtonElement>;
+              for (const btn of allButtons) {
+                if (btn.textContent?.trim().includes(deleteLabel)) {
+                  btn.disabled = true;
+                  return;
+                }
+              }
+            }
+          };
+
+          // Try to find button with delays
+          initDeleteButtonState();
+          setTimeout(initDeleteButtonState, 100);
+          setTimeout(initDeleteButtonState, 300);
+          setTimeout(initDeleteButtonState, 500);
         },
         unloadCallback: () => {
           // no-op
@@ -326,7 +435,7 @@ export class ReadingHistoryFactory {
               attributes: {
                 type: "search",
                 placeholder: `${getString("column-title")} / ${getString("column-authors")}`,
-                },
+              },
               styles: {
                 width: "100%",
                 padding: "6px 8px",
@@ -363,6 +472,27 @@ export class ReadingHistoryFactory {
                           namespace: "html",
                           styles: { position: "sticky", top: "0" },
                           children: [
+                            {
+                              tag: "th",
+                              namespace: "html",
+                              id: `${config.addonRef}-select-all-header`,
+                              styles: {
+                                padding: "8px",
+                                textAlign: "center",
+                                borderBottom: "2px solid var(--fill-tertiary)",
+                                fontWeight: "500",
+                                backgroundColor: "-moz-dialog",
+                                width: "40px",
+                              },
+                              children: [
+                                {
+                                  tag: "input",
+                                  namespace: "html",
+                                  id: selectAllCheckboxId,
+                                  attributes: { type: "checkbox" },
+                                },
+                              ],
+                            },
                             {
                               tag: "th",
                               namespace: "html",
@@ -417,6 +547,167 @@ export class ReadingHistoryFactory {
             },
           ],
         })
+        .addButton(getString("delete-selected-label"), "delete-selected", {
+          callback: async () => {
+            const selectedItems = ReadingHistoryFactory.dialogSelectedItems;
+            if (!selectedItems) return false;
+
+            const selectedIDs = Array.from(selectedItems);
+            const selectedCount = selectedIDs.length;
+            if (selectedCount === 0) return false;
+
+            const dialogWin = dialogHelper.window;
+            if (!dialogWin) return false;
+
+            const message = getString("delete-selected-confirm", { args: { count: selectedCount } });
+            const confirmed = Services.prompt.confirm(
+              dialogWin,
+              getString("delete-selected-title"),
+              message
+            );
+
+            if (confirmed) {
+              const historyStorage = ReadingHistoryFactory.dialogHistoryStorage;
+              if (!historyStorage) return false;
+
+              // Delete selected items
+              for (const itemID of selectedIDs) {
+                await historyStorage.deleteByItemID(itemID);
+              }
+
+              // Clear selection
+              selectedItems.clear();
+
+              // Reload and re-render
+              const allEntries = historyStorage.getAll();
+              ReadingHistoryFactory.dialogFilteredEntries = allEntries;
+
+              const tbody = dialogWin.document.querySelector(`#${tableBodyId}`) as HTMLTableSectionElement | null;
+              if (!tbody) return false;
+
+              const searchInput = dialogWin.document.querySelector(`#${searchInputId}`) as HTMLInputElement | null;
+              const keyword = (searchInput?.value || "").trim().toLowerCase();
+
+              let filteredEntries = [...allEntries];
+              if (keyword) {
+                filteredEntries = allEntries.filter((entry) => {
+                  const title = (entry.item.title || "").toLowerCase();
+                  const authors = (entry.item.authors || "").toLowerCase();
+                  return title.includes(keyword) || authors.includes(keyword);
+                });
+              }
+
+              // Re-render
+              while (tbody.firstChild) {
+                tbody.removeChild(tbody.firstChild);
+              }
+
+              if (filteredEntries.length === 0) {
+                const tr = dialogWin.document.createElement("tr");
+                const td = dialogWin.document.createElement("td");
+                td.colSpan = 4;
+                td.textContent = getString("no-history-yet");
+                td.style.padding = "20px";
+                td.style.textAlign = "center";
+                td.style.color = "var(--fill-secondary)";
+                td.style.backgroundColor = "-moz-dialog";
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+              } else {
+                for (const entry of filteredEntries) {
+                  const tr = dialogWin.document.createElement("tr");
+                  tr.style.cursor = "pointer";
+                  tr.dataset.itemId = String(entry.item.id);
+                  tr.addEventListener("dblclick", () => {
+                    dialogHelper.window?.close();
+                    setTimeout(() => this.openItem(entry.item.id), 100);
+                  });
+
+                  // Checkbox cell
+                  const checkboxCell = dialogWin.document.createElement("td");
+                  checkboxCell.style.padding = "4px 8px";
+                  checkboxCell.style.borderBottom = "1px solid var(--fill-quinary)";
+                  checkboxCell.style.backgroundColor = "-moz-dialog";
+                  checkboxCell.style.width = "40px";
+
+                  const checkbox = dialogWin.document.createElement("input");
+                  checkbox.type = "checkbox";
+                  checkbox.addEventListener("change", () => {
+                    if (checkbox.checked) {
+                      selectedItems.add(entry.item.id);
+                    } else {
+                      selectedItems.delete(entry.item.id);
+                    }
+                    const deleteLabel = getString("delete-selected-label");
+                    const selectors = ["button", ".dialog-button-box button"];
+                    for (const selector of selectors) {
+                      const allButtons = dialogWin.document.querySelectorAll(selector) as NodeListOf<HTMLButtonElement>;
+                      for (const btn of allButtons) {
+                        if (btn.textContent?.trim().includes(deleteLabel)) {
+                          btn.disabled = selectedItems.size === 0;
+                          return;
+                        }
+                      }
+                    }
+                  });
+                  checkbox.addEventListener("click", (e) => e.stopPropagation());
+                  checkboxCell.appendChild(checkbox);
+                  tr.appendChild(checkboxCell);
+
+                  // Title cell
+                  const titleCell = dialogWin.document.createElement("td");
+                  titleCell.textContent = entry.item.title;
+                  titleCell.style.padding = "4px 8px";
+                  titleCell.style.borderBottom = "1px solid var(--fill-quinary)";
+                  titleCell.style.backgroundColor = "-moz-dialog";
+                  tr.appendChild(titleCell);
+
+                  // Authors cell
+                  const authorsCell = dialogWin.document.createElement("td");
+                  authorsCell.textContent = entry.item.authors;
+                  authorsCell.style.padding = "4px 8px";
+                  authorsCell.style.borderBottom = "1px solid var(--fill-quinary)";
+                  authorsCell.style.backgroundColor = "-moz-dialog";
+                  tr.appendChild(authorsCell);
+
+                  // Time cell
+                  const timeCell = dialogWin.document.createElement("td");
+                  timeCell.textContent = new Date(entry.captureTime).toLocaleString();
+                  timeCell.style.padding = "4px 8px";
+                  timeCell.style.borderBottom = "1px solid var(--fill-quinary)";
+                  timeCell.style.whiteSpace = "nowrap";
+                  timeCell.style.backgroundColor = "-moz-dialog";
+                  tr.appendChild(timeCell);
+
+                  tbody.appendChild(tr);
+                }
+              }
+
+              // Update delete button and show success message
+              const deleteLabel = getString("delete-selected-label");
+              const selectors = ["button", ".dialog-button-box button"];
+              for (const selector of selectors) {
+                const allButtons = dialogWin.document.querySelectorAll(selector) as NodeListOf<HTMLButtonElement>;
+                for (const btn of allButtons) {
+                  if (btn.textContent?.trim().includes(deleteLabel)) {
+                    btn.disabled = true;
+                    const successMessage = getString("delete-success-message", { args: { count: selectedCount } });
+                    new ztoolkit.ProgressWindow(config.addonName)
+                      .createLine({
+                        text: successMessage,
+                        type: "success",
+                        progress: 100,
+                      })
+                      .show();
+                    return;
+                  }
+                }
+              }
+            }
+            
+            return false;
+          }
+        })
         .addButton(getString("clear-history-label"), "clear-all", {
           callback: () => {
             const confirmed = Services.prompt.confirm(
@@ -427,6 +718,13 @@ export class ReadingHistoryFactory {
             if (confirmed) {
               historyStorage.clear().then(() => {
                 dialogHelper.window?.close();
+                new ztoolkit.ProgressWindow(config.addonName)
+                  .createLine({
+                    text: getString("clear-success-message"),
+                    type: "success",
+                    progress: 100,
+                  })
+                  .show();
               });
             }
           }
@@ -527,7 +825,6 @@ export class ReadingHistoryFactory {
       if (!itemInfo) return;
 
       await HistoryStorage.getInstance().add({ item: itemInfo });
-      ztoolkit.log(`[ReadingHistory] Captured: ${itemInfo.title}`);
     } catch (e) {
       ztoolkit.log("[ReadingHistory] Capture failed:", e);
     }
