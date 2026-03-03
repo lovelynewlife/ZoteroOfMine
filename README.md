@@ -6,11 +6,11 @@
 
 A personal Zotero 7 plugin for tracking and managing PDF reading history with powerful filtering and deletion capabilities.
 
-![Reading History UI](./assets/readingHistoryUI.png)
-
 ## ✨ Features
 
 ### 📖 Reading History Management
+
+![Reading History UI](./assets/readingHistoryUI.png)
 
 - **Left Sidebar Integration**: Quick access via "Reading History" button at the bottom of the left sidebar
 - **Rich Information Display**: Shows document title, authors, and capture timestamp
@@ -196,16 +196,6 @@ Reading history is stored in:
 - **zotero-types** - TypeScript types for Zotero API
 - **IOUtils / PathUtils** - Firefox/Zotero 7 native file APIs
 
-## 📝 Changelog
-
-### Latest Changes
-
-- ✅ Add bulk deletion with checkbox selection
-- ✅ Add time-based deletion (day/week/month/quarter/half-year/year)
-- ✅ Add real-time search functionality
-- ✅ Add sortable columns
-- ✅ Improve UI with fixed table headers
-- ✅ Prevent dialog auto-close after deletion
 
 ## 🤝 Contributing
 
