@@ -22,8 +22,11 @@ export class ReadingHistoryFactory {
   private static dialogDialogHelper: any = null;
 
   static async register() {
+    ztoolkit.log("[ReadingHistory] Registering reading history feature");
     this.registerNotifier();
+    ztoolkit.log("[ReadingHistory] Loading history from file");
     await HistoryStorage.getInstance().loadFromJSON();
+    ztoolkit.log("[ReadingHistory] Loaded", HistoryStorage.getInstance().getCount(), "history entries");
     this.insertHistoryRow();
   }
 
@@ -1120,7 +1123,17 @@ export class ReadingHistoryFactory {
     }
   }
 
-  static unregister() {
+  static async unregister() {
+    ztoolkit.log("[ReadingHistory] Unregistering reading history feature");
+    
+    // Force save before unregistering and wait for completion
+    try {
+      await HistoryStorage.getInstance().forceSave();
+      ztoolkit.log("[ReadingHistory] Save completed successfully");
+    } catch (e) {
+      ztoolkit.log("[ReadingHistory] Force save failed:", e);
+    }
+
     if (this.historyRowElement) {
       this.historyRowElement.remove();
       this.historyRowElement = null;

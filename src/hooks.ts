@@ -98,7 +98,8 @@ async function onMainWindowLoad(win: Window): Promise<void> {
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
-  ReadingHistoryFactory.unregister();
+  // Wait for reading history to save before unloading
+  await ReadingHistoryFactory.unregister();
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
 }

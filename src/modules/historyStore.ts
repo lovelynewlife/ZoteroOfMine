@@ -36,15 +36,28 @@ interface HistoryJSONFile {
 }
 
 export class HistoryStorage {
+  // Singleton instance
   private static instance: HistoryStorage;
+  
+  // File storage configuration
   private static readonly JSON_FILENAME = "zoteroofmine_history.json";
   private static readonly JSON_VERSION = 1;
   
+  // In-memory data structures
   private entriesArray: ReadingHistoryEntry[] = [];
   private entriesMap: Map<string, ReadingHistoryEntry> = new Map();
   private entriesByItemID: Map<number, ReadingHistoryEntry> = new Map();
   private jsonFilePath: string | null = null;
+  
+  // State management
+  private isLoaded: boolean = false;
+  private saveInProgress: boolean = false;
+  private pendingSave: boolean = false;
 
+  // ========================================
+  // Singleton Pattern
+  // ========================================
+  
   static getInstance(): HistoryStorage {
     if (!HistoryStorage.instance) {
       HistoryStorage.instance = new HistoryStorage();
@@ -52,6 +65,10 @@ export class HistoryStorage {
     return HistoryStorage.instance;
   }
 
+  // ========================================
+  // Helper Methods
+  // ========================================
+  
   private generateId(itemID: number, captureTime: number): string {
     return `${itemID}-${captureTime}`;
   }
@@ -63,7 +80,18 @@ export class HistoryStorage {
     return this.jsonFilePath;
   }
 
+  // ========================================
+  // Public API
+  // ========================================
+  
   async add(entry: NewHistoryEntry): Promise<ReadingHistoryEntry> {
+    // Ensure data is loaded before adding new entry
+    if (!this.isLoaded) {
+      ztoolkit.log("[HistoryStorage] Data not loaded, loading from file...");
+      await this.ensureLoaded();
+      this.isLoaded = true;
+    }
+
     const itemID = entry.item.id;
     const captureTime = Date.now();
     const id = this.generateId(itemID, captureTime);
@@ -81,7 +109,8 @@ export class HistoryStorage {
     this.entriesMap.set(id, newEntry);
     this.entriesByItemID.set(itemID, newEntry);
 
-    await this.saveToJSON();
+    // Trigger save with queue management
+    this.queueSave();
 
     return newEntry;
   }
@@ -98,6 +127,10 @@ export class HistoryStorage {
     return this.entriesByItemID.get(itemID);
   }
 
+  getCount(): number {
+    return this.entriesArray.length;
+  }
+
   async deleteByItemID(itemID: number): Promise<boolean> {
     const entry = this.entriesByItemID.get(itemID);
     if (!entry) {
@@ -108,7 +141,8 @@ export class HistoryStorage {
     this.entriesMap.delete(entry.id);
     this.entriesByItemID.delete(itemID);
 
-    await this.saveToJSON();
+    // Trigger save with queue management
+    this.queueSave();
     return true;
   }
 
@@ -116,32 +150,148 @@ export class HistoryStorage {
     this.entriesArray = [];
     this.entriesMap.clear();
     this.entriesByItemID.clear();
+    
+    // Clear JSON file
     await this.clearJSONFile();
   }
 
-  getCount(): number {
-    return this.entriesArray.length;
+  /**
+   * Force save to JSON file
+   * Can be called externally to ensure data is persisted
+   */
+  async forceSave(): Promise<void> {
+    // If save is in progress, wait for it
+    await this.waitForSave();
+    
+    // Perform a save
+    await this.saveToJSON();
+  }
+
+  // ========================================
+  // Save Queue Management
+  // ========================================
+  
+  private queueSave(): void {
+    if (this.saveInProgress) {
+      // Mark that we have a pending save
+      this.pendingSave = true;
+      ztoolkit.log("[HistoryStorage] Save already in progress, marking as pending");
+      return;
+    }
+
+    // Start the save process
+    this.performSave();
+  }
+
+  private async performSave(): Promise<void> {
+    this.saveInProgress = true;
+    
+    try {
+      await this.saveToJSON();
+      
+      // If there's a pending save, do it again
+      if (this.pendingSave) {
+        ztoolkit.log("[HistoryStorage] Processing pending save");
+        this.pendingSave = false;
+        await this.saveToJSON();
+      }
+    } catch (e) {
+      ztoolkit.log("[HistoryStorage] Save failed:", e);
+    } finally {
+      this.saveInProgress = false;
+    }
+  }
+
+  /**
+   * Wait for any ongoing save to complete
+   * This should be called before shutdown
+   */
+  private async waitForSave(): Promise<void> {
+    if (this.saveInProgress) {
+      ztoolkit.log("[HistoryStorage] Waiting for save to complete...");
+      // Give it up to 5 seconds
+      const timeout = Date.now() + 5000;
+      while (this.saveInProgress && Date.now() < timeout) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      if (this.saveInProgress) {
+        ztoolkit.log("[HistoryStorage] Save still in progress after timeout");
+      }
+    }
   }
 
   // ========================================
   // JSON Storage Methods
   // ========================================
-
+  
   private async saveToJSON(): Promise<void> {
     try {
       const filePath = this.getJSONFilePath();
       
+      // Read existing file data to merge with memory data
+      let fileEntries: PersistentHistoryEntry[] = [];
+      try {
+        if (await IOUtils.exists(filePath)) {
+          const jsonString = await IOUtils.readUTF8(filePath);
+          const data: HistoryJSONFile = JSON.parse(jsonString as string);
+          if (data.entries && Array.isArray(data.entries)) {
+            fileEntries = data.entries;
+          }
+        }
+      } catch (readError) {
+        ztoolkit.log("[HistoryStorage] Failed to read existing file, will overwrite:", readError);
+      }
+
+      // Merge memory entries with file entries
+      // Keep the latest entry for each itemID based on captureTime
+      const mergedMap = new Map<number, PersistentHistoryEntry>();
+
+      // First add file entries
+      for (const entry of fileEntries) {
+        mergedMap.set(entry.itemID, entry);
+      }
+
+      // Then add memory entries (overwrite file entries for same itemID)
+      for (const entry of this.entriesArray) {
+        const persistentEntry: PersistentHistoryEntry = {
+          itemID: entry.item.id,
+          captureTime: entry.captureTime,
+        };
+        mergedMap.set(entry.item.id, persistentEntry);
+      }
+
+      // Convert map to array and sort by captureTime (newest first)
+      const mergedEntries = Array.from(mergedMap.values());
+      mergedEntries.sort((a, b) => b.captureTime - a.captureTime);
+
+      // Prepare data to write
       const data: HistoryJSONFile = {
         version: HistoryStorage.JSON_VERSION,
-        entries: this.entriesArray.map(e => ({
-          itemID: e.item.id,
-          captureTime: e.captureTime,
-        })),
+        entries: mergedEntries,
       };
 
-      await IOUtils.writeUTF8(filePath, JSON.stringify(data, null, 2));
+      const jsonString = JSON.stringify(data, null, 2);
+      await IOUtils.writeUTF8(filePath, jsonString);
+      
+      ztoolkit.log("[HistoryStorage] Saved", data.entries.length, "entries to file");
     } catch (e) {
       ztoolkit.log("[HistoryStorage] Save failed:", e);
+      
+      // Try to save a backup to /tmp
+      try {
+        const backupPath = `/tmp/zoteroofmine_history_backup_${Date.now()}.json`;
+        const data: HistoryJSONFile = {
+          version: HistoryStorage.JSON_VERSION,
+          entries: this.entriesArray.map(e => ({
+            itemID: e.item.id,
+            captureTime: e.captureTime,
+          })),
+        };
+        await IOUtils.writeUTF8(backupPath, JSON.stringify(data, null, 2));
+        ztoolkit.log("[HistoryStorage] Saved backup to:", backupPath);
+      } catch (backupError) {
+        ztoolkit.log("[HistoryStorage] Backup save also failed:", backupError);
+      }
     }
   }
 
@@ -150,29 +300,33 @@ export class HistoryStorage {
       const filePath = this.getJSONFilePath();
       
       if (!(await IOUtils.exists(filePath))) {
+        ztoolkit.log("[HistoryStorage] File does not exist, skipping load");
+        this.isLoaded = true;
         return;
       }
 
-      // Read file first before clearing memory
+      // Read file and load to memory
       const jsonString = await IOUtils.readUTF8(filePath);
       const data: HistoryJSONFile = JSON.parse(jsonString as string);
 
       if (!data.entries || !Array.isArray(data.entries)) {
-        ztoolkit.log("[HistoryStorage] Invalid file format");
+        ztoolkit.log("[HistoryStorage] Invalid file format, entries is not an array");
+        this.isLoaded = true;
         return;
       }
 
-      // Save backup before clearing
-      const backupEntries = [...this.entriesArray];
-
-      // Clear memory and reload from file
+      // Clear memory and load file entries
       this.entriesArray = [];
       this.entriesMap.clear();
       this.entriesByItemID.clear();
 
+      let loadedCount = 0;
       for (const { itemID, captureTime } of data.entries) {
         const item = ZDB.getItemById(itemID);
-        if (!item) continue;
+        if (!item) {
+          ztoolkit.log("[HistoryStorage] Item", itemID, "not found, skipping");
+          continue;
+        }
 
         const itemInfo: ItemInfo = {
           id: item.id,
@@ -190,22 +344,17 @@ export class HistoryStorage {
         this.entriesArray.push(entry);
         this.entriesMap.set(id, entry);
         this.entriesByItemID.set(itemID, entry);
+        loadedCount++;
       }
 
+      // Sort by captureTime (newest first)
       this.entriesArray.sort((a, b) => b.captureTime - a.captureTime);
 
-      // If file had invalid data and memory ended up empty, restore backup
-      if (this.entriesArray.length === 0 && backupEntries.length > 0) {
-        ztoolkit.log("[HistoryStorage] Restoring backup - file had no valid entries");
-        for (const entry of backupEntries) {
-          this.entriesArray.push(entry);
-          this.entriesMap.set(entry.id, entry);
-          this.entriesByItemID.set(entry.item.id, entry);
-        }
-      }
+      ztoolkit.log("[HistoryStorage] Successfully loaded", loadedCount, "entries");
+      this.isLoaded = true;
     } catch (e) {
       ztoolkit.log("[HistoryStorage] Load failed:", e);
-      // If loading fails, keep existing memory data intact
+      this.isLoaded = true;
     }
   }
 
@@ -229,7 +378,7 @@ export class HistoryStorage {
   // ========================================
   // Testing Methods
   // ========================================
-
+  
   /**
    * Add mock data for testing purposes
    * Creates entries with different time ranges to test time-based deletion
