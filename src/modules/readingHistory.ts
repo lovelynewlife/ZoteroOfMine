@@ -7,13 +7,14 @@ import { config } from "../../package.json";
 import { getString } from "../utils/locale";
 import { ZDB } from "../utils/zdb";
 import { HistoryStorage, ReadingHistoryEntry } from "./historyStore";
+import { HistoryPreferences, HistoryPrefKeys } from "./historyPreferences";
 
 export class ReadingHistoryFactory {
   private static history_notifierID: string | null = null;
   private static lastCaptureTime: Map<string, number> = new Map();
-  private static readonly CAPTURE_COOLDOWN_MS = 10000;
   private static historyRowId = `${config.addonRef}-history-row`;
   private static historyRowElement: HTMLElement | null = null;
+  private static preferenceObserverId: symbol | null = null;
   
   // Shared state for dialog callbacks
   private static dialogSelectedItems: Set<number> | null = null;
@@ -27,7 +28,43 @@ export class ReadingHistoryFactory {
     ztoolkit.log("[ReadingHistory] Loading history from file");
     await HistoryStorage.getInstance().loadFromJSON();
     ztoolkit.log("[ReadingHistory] Loaded", HistoryStorage.getInstance().getCount(), "history entries");
-    this.insertHistoryRow();
+    
+    // Check preference and show/hide accordingly
+    if (HistoryPreferences.isShowInSidebar()) {
+      this.insertHistoryRow();
+    }
+    
+    // Watch preference changes
+    this.watchPreferenceChanges();
+  }
+
+  /**
+   * Watch for preference changes and update UI accordingly
+   */
+  private static watchPreferenceChanges(): void {
+    this.preferenceObserverId = HistoryPreferences.observe(
+      HistoryPrefKeys.SHOW_IN_SIDEBAR,
+      (showInSidebar: boolean) => {
+        if (showInSidebar) {
+          ztoolkit.log("[ReadingHistory] Preference changed: showing in sidebar");
+          this.insertHistoryRow();
+        } else {
+          ztoolkit.log("[ReadingHistory] Preference changed: hiding from sidebar");
+          this.removeHistoryRow();
+        }
+      }
+    );
+  }
+
+  /**
+   * Remove history row from sidebar
+   */
+  private static removeHistoryRow(): void {
+    if (this.historyRowElement) {
+      this.historyRowElement.remove();
+      this.historyRowElement = null;
+      ztoolkit.log("[ReadingHistory] History row removed from sidebar");
+    }
   }
 
   private static insertHistoryRow() {
@@ -1093,8 +1130,9 @@ export class ReadingHistoryFactory {
   private static shouldCapture(tabID: string): boolean {
     const now = Date.now();
     const lastTime = this.lastCaptureTime.get(tabID);
+    const cooldownMs = HistoryPreferences.getCaptureCooldownMs();
 
-    if (lastTime && (now - lastTime) < this.CAPTURE_COOLDOWN_MS) {
+    if (lastTime && (now - lastTime) < cooldownMs) {
       return false;
     }
 
@@ -1134,9 +1172,13 @@ export class ReadingHistoryFactory {
       ztoolkit.log("[ReadingHistory] Force save failed:", e);
     }
 
-    if (this.historyRowElement) {
-      this.historyRowElement.remove();
-      this.historyRowElement = null;
+    // Remove history row
+    this.removeHistoryRow();
+
+    // Unregister preference observer
+    if (this.preferenceObserverId) {
+      HistoryPreferences.unobserve(HistoryPrefKeys.SHOW_IN_SIDEBAR);
+      this.preferenceObserverId = null;
     }
 
     if (addon.data.dialog) {

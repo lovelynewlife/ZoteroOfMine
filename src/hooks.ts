@@ -7,9 +7,9 @@ import {
 } from "./modules/examples";
 import { ReadingHistoryFactory } from "./modules/readingHistory";
 import { HistoryStorage } from "./modules/historyStore";
+import { HistoryPreferenceScript } from "./modules/historyPreferenceScript";
 import { config } from "../package.json";
 import { getString, initLocale } from "./utils/locale";
-import { registerPrefsScripts } from "./modules/preferenceScript";
 import { createZToolkit } from "./utils/ztoolkit";
 
 async function onStartup() {
@@ -24,6 +24,9 @@ async function onStartup() {
   addon.data.ztoolkit = createZToolkit();
 
   initLocale();
+
+  // Register preference panel
+  HistoryPreferenceScript.registerPrefsPanel();
 
   // BasicExampleFactory.registerPrefs();
   // BasicExampleFactory.registerNotifier();
@@ -144,7 +147,7 @@ async function onNotify(
 async function onPrefsEvent(type: string, data: { [key: string]: any }) {
   switch (type) {
     case "load":
-      registerPrefsScripts(data.window);
+      HistoryPreferenceScript.init(data.window);
       break;
     default:
       return;
