@@ -8,6 +8,7 @@ import {
 import { ReadingHistoryFactory } from "./modules/readingHistory";
 import { HistoryStorage } from "./modules/historyStore";
 import { HistoryPreferenceScript } from "./modules/historyPreferenceScript";
+import { VibeResearchFactory } from "./modules/vibeResearch";
 import { config } from "../package.json";
 import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
@@ -82,6 +83,9 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   // === Reading History Feature ===
   ReadingHistoryFactory.register();
 
+  // === Vibe Research Feature ===
+  VibeResearchFactory.register();
+
   // Add mock data for testing (only if no real data exists)
   // const storage = HistoryStorage.getInstance();
   // await storage.ensureLoaded();
@@ -103,6 +107,7 @@ async function onMainWindowLoad(win: Window): Promise<void> {
 async function onMainWindowUnload(win: Window): Promise<void> {
   // Wait for reading history to save before unloading
   await ReadingHistoryFactory.unregister();
+  VibeResearchFactory.unregister();
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
 }
