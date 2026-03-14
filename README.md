@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
 
-A personal Zotero 7 plugin for tracking and managing PDF reading history with powerful filtering and deletion capabilities.
+A personal Zotero 7 plugin for tracking and managing PDF reading history, with an upcoming AI-powered research assistant.
 
 ## ✨ Features
 
@@ -13,13 +13,14 @@ A personal Zotero 7 plugin for tracking and managing PDF reading history with po
 ![Reading History UI](./assets/readingHistoryUI.png)
 
 - **Left Sidebar Integration**: Quick access via "Reading History" button at the bottom of the left sidebar
-- **Rich Information Display**: Shows document title, authors, and capture timestamp
+- **Rich Information Display**: Shows document title, authors, year, DOI, and capture timestamp
 - **One-Click Open**: Double-click any history entry to open the corresponding document
 
 ### 🔍 Smart Search & Filter
 
 - **Real-time Search**: Filter history by document title or authors
-- **Sortable Columns**: Click column headers to sort by title, authors, or time
+- **Sortable Columns**: Click column headers to sort by title, authors, year, or time
+- **Pagination**: Navigate through large history datasets efficiently
 
 ### 🗑️ Flexible Deletion Options
 
@@ -34,6 +35,13 @@ A personal Zotero 7 plugin for tracking and managing PDF reading history with po
 - **Clear All**: Remove all history with a confirmation prompt
 - **Safe Operations**: All deletion operations require confirmation
 
+### ⚙️ Preference Settings
+
+Access via `Edit` → `Preferences` → `ZoteroOfMine`:
+
+- **Sidebar Visibility**: Toggle the "Reading History" button in the left sidebar
+- **Capture Cooldown**: Adjust the cooldown time (10-300 seconds) between captures for the same document
+
 ### ⚡ Automatic Capture
 
 Automatically tracks when you read PDF documents:
@@ -42,7 +50,7 @@ Automatically tracks when you read PDF documents:
 
 ### 🛡️ Smart Capture Management
 
-- **Cooldown Mechanism**: 10-second cooldown per tab prevents duplicate captures
+- **Configurable Cooldown**: Prevents duplicate captures within a customizable time window
 - **Minimal Storage**: Only stores item ID and timestamp; all other data fetched from Zotero API
 - **Data Freshness**: Always displays up-to-date document information
 
@@ -50,6 +58,19 @@ Automatically tracks when you read PDF documents:
 
 - English (en-US)
 - Chinese (中文)
+
+---
+
+### 🤖 Vibe Research (Coming Soon)
+
+An AI-powered research assistant that leverages your Zotero library for intelligent research workflows.
+
+**Status:** 🚧 Under Development
+
+**Planned Features:**
+- TBD
+
+---
 
 ## 📦 Installation
 
@@ -135,16 +156,19 @@ pnpm run build
 ```
 ZoteroOfMine/
 ├── addon/                    # Add-on resources
+│   ├── assets/              # Icons and images
 │   ├── locale/              # i18n translations
 │   │   ├── en-US/
 │   │   └── zh-CN/
 │   └── chrome/              # UI styles
 ├── src/
 │   ├── modules/
-│   │   ├── historyStore.ts  # Storage layer (JSON persistence)
-│   │   └── readingHistory.ts # UI & capture logic
+│   │   ├── historyStore.ts        # Storage layer (JSON persistence)
+│   │   ├── historyPreferences.ts  # Preference management
+│   │   ├── historyPreferenceScript.ts # Preference UI
+│   │   ├── readingHistory.ts      # Reading history UI & capture logic
+│   │   └── vibeResearch.ts        # Vibe Research module (WIP)
 │   └── utils/
-│       ├── mockHistory.ts   # Mock data for testing
 │       └── zdb.ts           # Zotero DB helpers
 ├── typings/                  # TypeScript declarations
 └── package.json
