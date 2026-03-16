@@ -121,6 +121,44 @@ vibe-research-linux.AppImage  ~150MB
 
 ---
 
+## Build Commands
+
+### Development (Current Platform Only)
+
+```bash
+# Build for current platform
+pnpm build:ui:linux    # On Linux
+pnpm build:ui:mac      # On macOS
+pnpm build:ui:win      # On Windows (requires Windows)
+```
+
+### Cross-Platform Build Limitations
+
+| Build Platform | Can Build For |
+|----------------|---------------|
+| Linux | Linux only |
+| macOS | macOS, Linux |
+| Windows | Windows, Linux |
+
+**Note**: Building Windows apps on Linux/macOS requires Wine.
+
+### Recommended: GitHub Actions CI/CD
+
+For production releases, use GitHub Actions to build all platforms:
+
+```bash
+# Push a tag to trigger release build
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow `.github/workflows/build.yml` will:
+1. Build on Windows, macOS, and Linux runners
+2. Create platform-specific XPI files
+3. Upload as release artifacts
+
+---
+
 ## Feature Enhancements
 
 ### Phase 1: Core Features

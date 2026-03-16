@@ -5,3 +5,8 @@ zotero-cmd.json
 pnpm-lock.yaml
 index.html
 .coze
+
+# Electron
+addon/vibe-research/
+src/chatui/out/
+src/chatui/dist-electron/

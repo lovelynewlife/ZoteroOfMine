@@ -1,0 +1,48 @@
+appId: com.zoteroofmine.vibe-research
+productName: Vibe Research
+directories:
+  buildResources: resources
+  output: dist-electron
+
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
+
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json}'
+
+extraResources:
+  - from: resources
+    to: resources
+
+win:
+  executableName: vibe-research
+  target:
+    - target: dir
+      arch:
+        - x64
+  artifactName: ${name}-${version}-${arch}-win.${ext}
+
+mac:
+  executableName: Vibe Research
+  target:
+    - target: dir
+      arch:
+        - x64
+        - arm64
+  artifactName: ${name}-${version}-${arch}-mac.${ext}
+  category: public.app-category.productivity
+
+linux:
+  target:
+    - target: dir
+      arch:
+        - x64
+  artifactName: ${name}-${version}-${arch}-linux.${ext}
+  category: Office
+
+publish: null

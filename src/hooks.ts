@@ -113,6 +113,9 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 }
 
 function onShutdown(): void {
+  // Kill Electron process before shutdown
+  VibeResearchFactory.killElectron();
+  
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
   // Remove addon object

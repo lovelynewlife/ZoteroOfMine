@@ -1,9 +1,18 @@
 /**
  * Vibe Research Module
  * AI-powered research assistant for Zotero papers
+ * 
+ * Launches an Electron-based chat UI application
  */
 
 import { config } from "../../package.json";
+
+// Subprocess handle type
+interface SubprocessHandle {
+  pid: number;
+  kill: () => Promise<void>;
+  wait: () => Promise<number>;
+}
 
 /**
  * VibeResearchFactory class
@@ -12,6 +21,8 @@ import { config } from "../../package.json";
 export class VibeResearchFactory {
   private static toolbarButtonId = `${config.addonRef}-vibe-research-btn`;
   private static toolbarButtonElement: HTMLElement | null = null;
+  private static electronProcess: SubprocessHandle | null = null;
+  private static isDevelopment = true; // Set to false when bundled
 
   /**
    * Register the vibe research feature
@@ -26,6 +37,7 @@ export class VibeResearchFactory {
    */
   static unregister(): void {
     this.removeToolbarButton();
+    this.killElectron();
     ztoolkit.log("[VibeResearch] Unregistered Vibe Research feature");
   }
 
@@ -91,7 +103,7 @@ export class VibeResearchFactory {
           listener: (e: Event) => {
             e.preventDefault();
             e.stopPropagation();
-            this.showPopupWindow();
+            this.launchElectron();
           },
         },
         {
@@ -114,31 +126,21 @@ export class VibeResearchFactory {
    * Find the toolbar and insert the button
    */
   private static findAndInsert(button: HTMLElement, doc: Document): void {
-    // Try to find the main Zotero toolbar
-    // Common toolbar IDs in Zotero 7:
-    // - zotero-toolbar
-    // - main-toolbar
-    // - zotero-tb
-    
     let toolbar = doc.getElementById("zotero-toolbar");
     
     if (!toolbar) {
-      // Try alternative toolbar locations
       toolbar = doc.querySelector("#zotero-toolbar-toolbar") as HTMLElement;
     }
     
     if (!toolbar) {
-      // Try to find toolbar by class or other selectors
       toolbar = doc.querySelector(".zotero-toolbar") as HTMLElement;
     }
 
     if (toolbar) {
-      // Append button to toolbar
       toolbar.appendChild(button);
       this.toolbarButtonElement = button;
       ztoolkit.log("[VibeResearch] Toolbar button inserted successfully");
     } else {
-      // Fallback: insert into sidebar footer (similar to reading history)
       ztoolkit.log("[VibeResearch] Main toolbar not found, trying sidebar fallback");
       this.insertToSidebar(button, doc);
     }
@@ -176,22 +178,148 @@ export class VibeResearchFactory {
   }
 
   /**
-   * Show popup window (stub for future chat window)
+   * Get Electron executable path based on platform
    */
-  private static showPopupWindow(): void {
-    ztoolkit.log("[VibeResearch] Opening popup window");
+  private static getElectronPath(): string | null {
+    const platform = Zotero.platform;
     
-    // Simple popup window using ztoolkit.ProgressWindow
+    // Development mode: show message
+    if (this.isDevelopment) {
+      return null;
+    }
+
+    // Production: get path from bundled Electron app
+    // The path structure after bundle:
+    // addon/vibe-research/
+    //   ├── win/vibe-research.exe
+    //   ├── mac/vibe-research.app/Contents/MacOS/Vibe Research
+    //   └── linux/vibe-research
+    
+    const basePath = `${rootURI}vibe-research/`;
+    
+    switch (platform) {
+      case "win": {
+        const exePath = `${basePath}win/vibe-research.exe`;
+        ztoolkit.log(`[VibeResearch] Windows path: ${exePath}`);
+        return exePath;
+      }
+      case "mac": {
+        const appPath = `${basePath}mac/vibe-research.app`;
+        const exePath = `${appPath}/Contents/MacOS/Vibe Research`;
+        ztoolkit.log(`[VibeResearch] macOS path: ${exePath}`);
+        return exePath;
+      }
+      case "linux": {
+        const exePath = `${basePath}linux/vibe-research`;
+        ztoolkit.log(`[VibeResearch] Linux path: ${exePath}`);
+        return exePath;
+      }
+      default: {
+        ztoolkit.log(`[VibeResearch] Unsupported platform: ${platform}`);
+        return null;
+      }
+    }
+  }
+
+  /**
+   * Launch Electron application
+   */
+  private static async launchElectron(): Promise<void> {
+    ztoolkit.log("[VibeResearch] Launching Electron application");
+
+    // Check if already running
+    if (this.electronProcess) {
+      this.showNotification("Vibe Research is already running", "info");
+      return;
+    }
+
+    // Development mode: show instruction
+    if (this.isDevelopment) {
+      this.showDevelopmentModeMessage();
+      return;
+    }
+
+    // Get executable path
+    const execPath = this.getElectronPath();
+    if (!execPath) {
+      this.showNotification("Failed to find Electron application", "error");
+      return;
+    }
+
+    try {
+      // Launch using Subprocess
+      const process = await Zotero.Subprocess.call({
+        command: execPath,
+        arguments: [],
+        stderr: "pipe",
+      });
+
+      this.electronProcess = process;
+      ztoolkit.log(`[VibeResearch] Electron launched with PID: ${process.pid}`);
+
+      // Show notification
+      this.showNotification("Vibe Research started", "success");
+
+      // Wait for process to exit
+      const exitCode = await process.wait();
+      ztoolkit.log(`[VibeResearch] Electron exited with code: ${exitCode}`);
+      this.electronProcess = null;
+
+    } catch (e) {
+      ztoolkit.log("[VibeResearch] Failed to launch Electron:", e);
+      this.showNotification(`Failed to launch: ${e}`, "error");
+      this.electronProcess = null;
+    }
+  }
+
+  /**
+   * Kill Electron process
+   */
+  static async killElectron(): Promise<void> {
+    if (!this.electronProcess) {
+      return;
+    }
+
+    try {
+      await this.electronProcess.kill();
+      ztoolkit.log("[VibeResearch] Electron process killed");
+    } catch (e) {
+      ztoolkit.log("[VibeResearch] Failed to kill Electron:", e);
+    }
+    this.electronProcess = null;
+  }
+
+  /**
+   * Show notification in Zotero
+   */
+  private static showNotification(text: string, type: "success" | "error" | "info"): void {
     new ztoolkit.ProgressWindow("Vibe Research")
       .createLine({
-        text: "🤖 Vibe Research Agent",
+        text: text,
+        type: type === "error" ? "fail" : "default",
+        progress: 100,
+      })
+      .show(3000);
+  }
+
+  /**
+   * Show development mode message
+   */
+  private static showDevelopmentModeMessage(): void {
+    new ztoolkit.ProgressWindow("Vibe Research - Development Mode")
+      .createLine({
+        text: "🚧 Development Mode",
         type: "default",
         progress: 100,
       })
       .createLine({
-        text: "Chat window coming soon...",
+        text: "Please run Electron separately:",
         type: "default",
       })
-      .show(3000);
+      .createLine({
+        text: "pnpm dev:ui",
+        type: "default",
+      })
+      .show(5000);
   }
 }
