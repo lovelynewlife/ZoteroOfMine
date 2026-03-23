@@ -83,7 +83,7 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   // === Reading History Feature ===
   ReadingHistoryFactory.register();
 
-  // === Vibe Research Feature ===
+  // === Vibe Research Feature (Placeholder) ===
   VibeResearchFactory.register();
 
   // Add mock data for testing (only if no real data exists)
@@ -113,9 +113,6 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 }
 
 function onShutdown(): void {
-  // Kill Electron process before shutdown
-  VibeResearchFactory.killElectron();
-  
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
   // Remove addon object

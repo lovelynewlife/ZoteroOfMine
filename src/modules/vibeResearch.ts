@@ -2,27 +2,19 @@
  * Vibe Research Module
  * AI-powered research assistant for Zotero papers
  * 
- * Launches an Electron-based chat UI application
+ * Currently shows a placeholder popup window.
+ * Future: Integration with external AI clients via CCP protocol.
  */
 
 import { config } from "../../package.json";
 
-// Subprocess handle type
-interface SubprocessHandle {
-  pid: number;
-  kill: () => Promise<void>;
-  wait: () => Promise<number>;
-}
-
 /**
  * VibeResearchFactory class
- * Provides a toolbar button that opens a research assistant chat window
+ * Provides a toolbar button for research assistant features
  */
 export class VibeResearchFactory {
   private static toolbarButtonId = `${config.addonRef}-vibe-research-btn`;
   private static toolbarButtonElement: HTMLElement | null = null;
-  private static electronProcess: SubprocessHandle | null = null;
-  private static isDevelopment = true; // Set to false when bundled
 
   /**
    * Register the vibe research feature
@@ -37,7 +29,6 @@ export class VibeResearchFactory {
    */
   static unregister(): void {
     this.removeToolbarButton();
-    this.killElectron();
     ztoolkit.log("[VibeResearch] Unregistered Vibe Research feature");
   }
 
@@ -103,7 +94,7 @@ export class VibeResearchFactory {
           listener: (e: Event) => {
             e.preventDefault();
             e.stopPropagation();
-            this.launchElectron();
+            this.showPopup();
           },
         },
         {
@@ -178,148 +169,26 @@ export class VibeResearchFactory {
   }
 
   /**
-   * Get Electron executable path based on platform
+   * Show popup window
+   * TODO: Future integration with external AI clients via CCP protocol
    */
-  private static getElectronPath(): string | null {
-    const platform = Zotero.platform;
+  private static showPopup(): void {
+    ztoolkit.log("[VibeResearch] Show popup");
     
-    // Development mode: show message
-    if (this.isDevelopment) {
-      return null;
-    }
-
-    // Production: get path from bundled Electron app
-    // The path structure after bundle:
-    // addon/vibe-research/
-    //   ├── win/vibe-research.exe
-    //   ├── mac/vibe-research.app/Contents/MacOS/Vibe Research
-    //   └── linux/vibe-research
-    
-    const basePath = `${rootURI}vibe-research/`;
-    
-    switch (platform) {
-      case "win": {
-        const exePath = `${basePath}win/vibe-research.exe`;
-        ztoolkit.log(`[VibeResearch] Windows path: ${exePath}`);
-        return exePath;
-      }
-      case "mac": {
-        const appPath = `${basePath}mac/vibe-research.app`;
-        const exePath = `${appPath}/Contents/MacOS/Vibe Research`;
-        ztoolkit.log(`[VibeResearch] macOS path: ${exePath}`);
-        return exePath;
-      }
-      case "linux": {
-        const exePath = `${basePath}linux/vibe-research`;
-        ztoolkit.log(`[VibeResearch] Linux path: ${exePath}`);
-        return exePath;
-      }
-      default: {
-        ztoolkit.log(`[VibeResearch] Unsupported platform: ${platform}`);
-        return null;
-      }
-    }
-  }
-
-  /**
-   * Launch Electron application
-   */
-  private static async launchElectron(): Promise<void> {
-    ztoolkit.log("[VibeResearch] Launching Electron application");
-
-    // Check if already running
-    if (this.electronProcess) {
-      this.showNotification("Vibe Research is already running", "info");
-      return;
-    }
-
-    // Development mode: show instruction
-    if (this.isDevelopment) {
-      this.showDevelopmentModeMessage();
-      return;
-    }
-
-    // Get executable path
-    const execPath = this.getElectronPath();
-    if (!execPath) {
-      this.showNotification("Failed to find Electron application", "error");
-      return;
-    }
-
-    try {
-      // Launch using Subprocess
-      const process = await Zotero.Subprocess.call({
-        command: execPath,
-        arguments: [],
-        stderr: "pipe",
-      });
-
-      this.electronProcess = process;
-      ztoolkit.log(`[VibeResearch] Electron launched with PID: ${process.pid}`);
-
-      // Show notification
-      this.showNotification("Vibe Research started", "success");
-
-      // Wait for process to exit
-      const exitCode = await process.wait();
-      ztoolkit.log(`[VibeResearch] Electron exited with code: ${exitCode}`);
-      this.electronProcess = null;
-
-    } catch (e) {
-      ztoolkit.log("[VibeResearch] Failed to launch Electron:", e);
-      this.showNotification(`Failed to launch: ${e}`, "error");
-      this.electronProcess = null;
-    }
-  }
-
-  /**
-   * Kill Electron process
-   */
-  static async killElectron(): Promise<void> {
-    if (!this.electronProcess) {
-      return;
-    }
-
-    try {
-      await this.electronProcess.kill();
-      ztoolkit.log("[VibeResearch] Electron process killed");
-    } catch (e) {
-      ztoolkit.log("[VibeResearch] Failed to kill Electron:", e);
-    }
-    this.electronProcess = null;
-  }
-
-  /**
-   * Show notification in Zotero
-   */
-  private static showNotification(text: string, type: "success" | "error" | "info"): void {
     new ztoolkit.ProgressWindow("Vibe Research")
       .createLine({
-        text: text,
-        type: type === "error" ? "fail" : "default",
+        text: "🚧 Coming Soon",
+        type: "default",
         progress: 100,
+      })
+      .createLine({
+        text: "Integration with external AI clients",
+        type: "default",
+      })
+      .createLine({
+        text: "via CCP Protocol & Zotero CLI",
+        type: "default",
       })
       .show(3000);
-  }
-
-  /**
-   * Show development mode message
-   */
-  private static showDevelopmentModeMessage(): void {
-    new ztoolkit.ProgressWindow("Vibe Research - Development Mode")
-      .createLine({
-        text: "🚧 Development Mode",
-        type: "default",
-        progress: 100,
-      })
-      .createLine({
-        text: "Please run Electron separately:",
-        type: "default",
-      })
-      .createLine({
-        text: "pnpm dev:ui",
-        type: "default",
-      })
-      .show(5000);
   }
 }
