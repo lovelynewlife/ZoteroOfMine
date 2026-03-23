@@ -74,6 +74,72 @@ Each tool invocation = one CLI execution, simple and stateless.
 
 ---
 
+## Alternatives Considered
+
+### pyzotero CLI
+
+[pyzotero](https://github.com/urschrei/pyzotero) (1.1k+ stars) includes a CLI for searching local Zotero libraries.
+
+**Architecture:**
+```
+┌─────────────────┐     HTTP      ┌─────────────────┐
+│ pyzotero CLI    │ ──────────▶  │ Zotero 7 App    │
+│ (client)        │              │ (Local API)     │
+└─────────────────┘              └────────┬────────┘
+                                          │
+                                          ▼
+                                 ┌─────────────────┐
+                                 │ zotero.sqlite   │
+                                 └─────────────────┘
+```
+
+**Requires Zotero running because:**
+- Uses Zotero 7's built-in local API server
+- Must enable "Allow other applications on this computer to communicate with Zotero"
+
+### Feature Comparison
+
+| Feature | pyzotero CLI | Our Zotero CLI |
+|---------|--------------|----------------|
+| **Data Source** | Local API (needs Zotero running) | Direct SQLite (fully offline) |
+| **Dependencies** | Zotero 7 + enable local API | None (just file access) |
+| `search` | ✅ | ✅ |
+| `--fulltext` | ✅ (uses Zotero index) | ✅ (extract ourselves) |
+| `listcollections` | ✅ | ✅ |
+| `itemtypes` | ✅ | Can add |
+| `pdf` extract | ❌ | ✅ `zotero pdf <key>` |
+| `annotations` | ❌ | ✅ `zotero annotations <key>` |
+| `recent` | ❌ | ✅ `zotero recent` |
+| `tags` | ❌ | ✅ `zotero tags` |
+| **Output** | text / JSON | JSON (structured) |
+| **Tool Calling** | Partial | Fully optimized |
+
+### Why Direct SQLite Access?
+
+| Aspect | Local API (pyzotero) | Direct SQLite (ours) |
+|--------|---------------------|---------------------|
+| **Availability** | Requires Zotero running | Always available |
+| **Dependencies** | Application + settings | File system only |
+| **Full-text Search** | Uses existing index | Need to extract PDFs |
+| **Data Consistency** | Guaranteed by Zotero | Must handle schema |
+| **Control** | Limited to API | Full database access |
+| **Lightweight** | No (requires app) | Yes (single CLI) |
+
+### Our Choice: Direct SQLite
+
+**Reasons:**
+1. **Tool Calling scenarios** - User may not have Zotero open when chatting with AI
+2. **Lighter weight** - No process dependencies
+3. **More control** - Not affected by Zotero API changes
+4. **More features** - PDF extraction, annotations, recent items, tags
+
+**Trade-off:**
+- Must understand Zotero's SQLite schema
+- Must handle PDF extraction ourselves
+- May have edge cases with database locking (when Zotero is running)
+
+---
+
 ## CLI Commands
 
 | Command | Description |
