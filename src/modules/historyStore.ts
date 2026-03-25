@@ -243,15 +243,12 @@ export class HistoryStorage {
       }
 
       // Merge memory entries with file entries
-      // Keep the latest entry for each itemID based on captureTime
+      // Memory entries are the source of truth - only save what's in memory
+      // This ensures deleted items stay deleted
       const mergedMap = new Map<number, PersistentHistoryEntry>();
 
-      // First add file entries
-      for (const entry of fileEntries) {
-        mergedMap.set(entry.itemID, entry);
-      }
-
-      // Then add memory entries (overwrite file entries for same itemID)
+      // Only add memory entries - memory is the source of truth
+      // Deleted items will not be in memory, so they won't be saved
       for (const entry of this.entriesArray) {
         const persistentEntry: PersistentHistoryEntry = {
           itemID: entry.item.id,
