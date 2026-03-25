@@ -521,8 +521,8 @@ export class ReadingHistoryFactory {
                 ztoolkit.log("[ReadingHistory] Confirmed:", confirmed);
                 
                 if (confirmed) {
-                  // Delete entries older than threshold
-                  const entriesToDelete = filteredEntries.filter(
+                  // Delete ALL entries older than threshold (ignore search filter)
+                  const entriesToDelete = entries.filter(
                     (entry) => entry.captureTime < thresholdTime
                   );
                   ztoolkit.log("[ReadingHistory] Entries to delete:", entriesToDelete.length);
@@ -536,7 +536,10 @@ export class ReadingHistoryFactory {
                       await historyStorage.deleteByItemID(itemId);
                     }
                     
-                    // Update filtered entries
+                    // Update both entries and filteredEntries
+                    entries.splice(0, entries.length, ...entries.filter(
+                      (entry) => !itemIdsToDelete.includes(entry.item.id)
+                    ));
                     filteredEntries = filteredEntries.filter(
                       (entry) => !itemIdsToDelete.includes(entry.item.id)
                     );
