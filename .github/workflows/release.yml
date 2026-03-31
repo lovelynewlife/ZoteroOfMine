@@ -75,6 +75,7 @@ jobs:
 
       - name: Build with PyInstaller
         working-directory: cli
+        shell: bash
         run: |
           pyinstaller --onefile --name zcli \
             --paths src \
@@ -90,6 +91,7 @@ jobs:
 
       - name: Test executable
         working-directory: cli
+        shell: bash
         run: |
           ./dist/${{ matrix.executable }} --help
           ./dist/${{ matrix.executable }} --version
