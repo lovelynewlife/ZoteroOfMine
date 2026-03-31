@@ -9,8 +9,37 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
+  # Build Zotero plugin (.xpi)
+  build-plugin:
+    name: Build Zotero Plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zoteroofmine-xpi
+          path: build/zoteroofmine.xpi
+          retention-days: 1
+
+  # Build CLI binaries on multiple platforms
+  build-cli:
+    name: Build CLI on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -72,14 +101,21 @@ jobs:
           path: cli/dist/${{ matrix.executable }}
           retention-days: 1
 
+  # Create GitHub Release with all artifacts
   release:
     name: Create Release
-    needs: build
+    needs: [build-plugin, build-cli]
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download plugin artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zoteroofmine-xpi
+          path: artifacts/plugin
 
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
@@ -102,6 +138,7 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release
+          mv artifacts/plugin/zoteroofmine.xpi release/
           mv artifacts/linux/zcli release/zcli-linux-x64
           mv artifacts/windows/zcli.exe release/zcli-windows-x64.exe
           mv artifacts/macos/zcli release/zcli-macos-x64
@@ -120,9 +157,14 @@ jobs:
         with:
           name: Release ${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## zcli ${{ steps.get_version.outputs.VERSION }}
+            ## ZoteroOfMine ${{ steps.get_version.outputs.VERSION }}
             
-            ### Downloads
+            ### Zotero Plugin
+            | File | Description |
+            |------|-------------|
+            | `zoteroofmine.xpi` | Zotero 7 plugin, install via Tools > Add-ons |
+            
+            ### CLI Tool (zcli)
             | Platform | File |
             |----------|------|
             | Linux (x64) | `zcli-linux-x64` |
@@ -133,6 +175,12 @@ jobs:
             See `checksums.txt` for SHA256 checksums.
             
             ### Installation
+            
+            **Zotero Plugin:**
+            1. Download `zoteroofmine.xpi`
+            2. In Zotero: Tools → Add-ons → Gear icon → Install Add-on From File
+            
+            **CLI Tool:**
             ```bash
             # Linux/macOS
             chmod +x zcli-*
