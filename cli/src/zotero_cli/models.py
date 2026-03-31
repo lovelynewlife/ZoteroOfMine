@@ -17,6 +17,7 @@ class Item:
     doi: Optional[str] = None
     url: Optional[str] = None
     publication: Optional[str] = None
+    pdf_path: Optional[str] = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON output."""
@@ -30,6 +31,7 @@ class Item:
             "doi": self.doi,
             "url": self.url,
             "publication": self.publication,
+            "pdf_path": self.pdf_path,
         }
 
 

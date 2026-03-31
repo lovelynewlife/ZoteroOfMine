@@ -11,8 +11,9 @@ from .models import Collection, Item, Tag
 class Database:
     """Zotero SQLite database wrapper."""
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, data_dir: Optional[Path] = None):
         self.db_path = db_path
+        self.data_dir = data_dir or db_path.parent
         self._conn: Optional[sqlite3.Connection] = None
 
     def connect(self) -> None:
@@ -168,6 +169,7 @@ class Database:
 
         item_id = row["itemID"]
         authors = self._get_authors(cursor, item_id)
+        pdf_path = self._get_pdf_path(cursor, item_id)
 
         year = None
         if row["date"]:
@@ -185,6 +187,7 @@ class Database:
             doi=row["doi"],
             url=row["url"],
             publication=row["publication"],
+            pdf_path=pdf_path,
         )
 
     def get_collections(self) -> list[Collection]:
@@ -265,3 +268,31 @@ class Database:
                 authors.append(row["lastName"])
 
         return authors
+
+    def _get_pdf_path(self, cursor: sqlite3.Cursor, item_id: int) -> Optional[str]:
+        """Get PDF path for an item by finding its attachment."""
+        # Find attachment linked to this item
+        sql = """
+            SELECT ia.path, i.key as attachment_key
+            FROM itemAttachments ia
+            JOIN items i ON ia.itemID = i.itemID
+            WHERE ia.parentItemID = ? AND ia.contentType = 'application/pdf'
+            LIMIT 1
+        """
+        cursor.execute(sql, (item_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            return None
+
+        # Path format: "storage:filename.pdf"
+        path = row["path"]
+        attachment_key = row["attachment_key"]
+
+        if path and path.startswith("storage:"):
+            filename = path[8:]  # Remove "storage:" prefix
+            full_path = self.data_dir / "storage" / attachment_key / filename
+            if full_path.exists():
+                return str(full_path)
+
+        return None

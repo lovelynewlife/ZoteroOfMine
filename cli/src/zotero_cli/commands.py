@@ -38,7 +38,7 @@ def cmd_get(config: Config, key: str) -> str:
     if not config.database_path:
         return output_json({}, success=False, error="Zotero data directory not configured. Run 'zcli config init' first.")
 
-    db = Database(config.database_path)
+    db = Database(config.database_path, config.data_dir)
     try:
         item = db.get_item(key)
         if item:
