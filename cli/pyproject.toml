@@ -1,0 +1,25 @@
+[project]
+name = "zcli"
+version = "0.1.0"
+description = "CLI tool for querying local Zotero database"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.0.0",
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+zcli = "zotero_cli.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/zotero_cli"]
