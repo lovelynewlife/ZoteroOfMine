@@ -143,6 +143,117 @@ The dominant sequence transduction models are based on complex recurrent or conv
 
 ---
 
+## Action Suggestions
+
+CCP can include **suggested actions** that inform the AI client about available tools and recommended operations. This transforms CCP from passive context passing to active tool discovery.
+
+### Why Action Suggestions?
+
+| Without Suggestions | With Suggestions |
+|---------------------|------------------|
+| AI receives context only | AI knows what actions are possible |
+| User must manually invoke tools | AI can suggest relevant operations |
+| No integration with local tools | Seamless connection to CLI tools like `zcli` |
+
+### Suggestion Structure
+
+```json
+{
+  "ccp": "1.0",
+  "source": { "app": "zotero" },
+  "type": "selection",
+  "meta": {
+    "item-key": "XQRMYQUN",
+    "title": "Attention Is All You Need",
+    "year": 2017
+  },
+  "content": {
+    "text": "The dominant sequence transduction models..."
+  },
+  "actions": {
+    "primary": {
+      "label": "Search related papers",
+      "tool": "zcli_search",
+      "params": { "query": "transformer attention" }
+    },
+    "secondary": [
+      {
+        "label": "Get full metadata",
+        "tool": "zcli_get_item",
+        "params": { "key": "XQRMYQUN" }
+      }
+    ]
+  },
+  "context_tools": [
+    {
+      "name": "zcli_search",
+      "description": "Search this Zotero library",
+      "hint": "Find related papers"
+    }
+  ]
+}
+```
+
+### Action Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `actions.primary` | object | Primary recommended action |
+| `actions.secondary` | array | Additional suggested actions |
+| `context_tools` | array | Available tools in this context |
+
+### Action Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `label` | string | Human-readable action label |
+| `tool` | string | Tool identifier (e.g., `zcli_search`) |
+| `params` | object | Pre-filled parameters for the tool |
+
+### Integration with zcli
+
+CCP from Zotero can suggest `zcli` commands:
+
+```
+User Flow:
+1. Select text in Zotero PDF → CCP Copy
+2. CCP includes: content + metadata + suggested zcli commands
+3. Paste in AI client → Shows context + action buttons
+4. Click action → Execute zcli command
+```
+
+### Consumer UI Concept
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  📎 Context from Zotero                                     │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ 📄 Attention Is All You Need (2017)                    ││
+│  │ "The dominant sequence transduction models..."         ││
+│  └─────────────────────────────────────────────────────────┘│
+│                                                             │
+│  💡 Suggested Actions:                                       │
+│  [🔍 Search related papers]  [📋 Get citation info]         │
+│                                                             │
+│  🔧 Available: zcli_search, zcli_get_item, zcli_tags        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Parameter Templating
+
+Actions support template variables from metadata:
+
+```json
+{
+  "label": "Search papers by {meta.authors.0}",
+  "params": { "query": "{meta.authors.0}" }
+}
+```
+
+Consumer resolves `{meta.authors.0}` to the first author's name before execution.
+
+---
+
 ## File Mode (Large Content Handling)
 
 Clipboard has size limitations (typically ~4MB on Windows, varies by system). For large content (full PDFs, long documents, code files), use **File Mode**.
