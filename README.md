@@ -68,32 +68,16 @@ pnpm run build
 
 ### zcli CLI Tool
 
-#### Option 1: Download Binary (Recommended)
+CLI installation, usage, and release distribution are maintained in:
 
-Download from [Releases](https://github.com/lovelynewlife/ZoteroOfMine/releases):
+- [cli/README.md](cli/README.md)
 
-| Platform | File |
-|----------|------|
-| Linux (x64) | `zcli-linux-x64` |
-| Windows (x64) | `zcli-windows-x64.exe` |
-| macOS (x64) | `zcli-macos-x64` |
+MCP quick start for Codex:
 
 ```bash
-# Linux/macOS
-chmod +x zcli-*
-sudo mv zcli-* /usr/local/bin/zcli
-```
-
-#### Option 2: Install via pip
-
-```bash
-pip install git+https://github.com/lovelynewlife/ZoteroOfMine.git#subdirectory=cli
-```
-
-#### Option 3: Run with uvx
-
-```bash
-uvx --from git+https://github.com/lovelynewlife/ZoteroOfMine.git#subdirectory=cli zcli
+cd cli
+pip install -e ".[mcp]"
+codex mcp add zcli -- zcli-mcp
 ```
 
 ---
@@ -119,95 +103,9 @@ Double-click any row in the history table to open the corresponding document.
 
 ### zcli CLI Tool
 
-#### Quick Start
+For zcli commands, configuration, and MCP integration details, see:
 
-```bash
-# Show help
-zcli --help
-
-# Show version
-zcli --version
-
-# Configure Zotero data directory
-zcli config detect                    # Auto-detect
-zcli config set ~/Zotero              # Manual set
-zcli config show                      # Show current config
-
-# Search items
-zcli search "machine learning" --limit 10
-
-# Get item details
-zcli get XQRMYQUN
-
-# List collections
-zcli collections
-
-# List tags
-zcli tags
-```
-
-#### Commands Reference
-
-| Command | Description |
-|---------|-------------|
-| `zcli search <query>` | Full-text search by title, authors, abstract |
-| `zcli get <key>` | Get detailed item information |
-| `zcli collections` | List all collections |
-| `zcli tags` | List all tags |
-| `zcli config show` | Show current configuration |
-| `zcli config set <path>` | Set Zotero data directory |
-| `zcli config detect` | Auto-detect Zotero data directory |
-
-#### Configuration Priority
-
-1. **Environment Variable**: `ZOTERO_DATA_DIR`
-2. **Config File**: `~/.zcli/config.json`
-3. **Auto-Detect**: Search common paths
-
-```bash
-# Using environment variable
-export ZOTERO_DATA_DIR=~/Zotero
-zcli search "database"
-```
-
-#### Output Format
-
-All commands output JSON for easy parsing by LLMs:
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "key": "XQRMYQUN",
-      "title": "Paper Title",
-      "authors": ["Author 1", "Author 2"],
-      "year": 2024,
-      "pdf_path": "/path/to/paper.pdf"
-    }
-  ]
-}
-```
-
-#### LLM Tool Calling Integration
-
-Configure `zcli` as a tool in your AI client:
-
-```json
-{
-  "name": "zcli_search",
-  "description": "Search Zotero library for papers",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "query": { "type": "string" }
-    },
-    "required": ["query"]
-  }
-}
-```
-
-The AI can then execute: `zcli search "your query" --limit 5`
+- [cli/README.md](cli/README.md)
 
 ---
 
@@ -252,12 +150,16 @@ ZoteroOfMine/
 │   └── utils/
 │       └── zdb.ts           # Zotero DB helpers
 ├── cli/                      # zcli CLI tool
+│   ├── Makefile              # CLI/MCP build targets
+│   ├── entrypoint.py         # PyInstaller entrypoint (zcli)
+│   ├── entrypoint_mcp.py     # PyInstaller entrypoint (zcli-mcp)
 │   ├── src/zotero_cli/
 │   │   ├── main.py          # CLI entry point
 │   │   ├── commands.py      # Command handlers
 │   │   ├── database.py      # SQLite queries
 │   │   ├── config.py        # Configuration
-│   │   └── models.py        # Data models
+│   │   ├── models.py        # Data models
+│   │   └── mcp_server.py    # MCP server for Codex/tool calling
 │   ├── tests/               # pytest tests
 │   └── pyproject.toml
 ├── .github/workflows/        # CI/CD

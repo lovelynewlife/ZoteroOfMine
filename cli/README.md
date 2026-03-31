@@ -133,6 +133,168 @@ zcli config set data_dir /path/to/zotero
 zcli config set read_only true
 ```
 
+## Command Reference
+
+### Global
+
+```bash
+zcli --help
+zcli --version
+zcli -v
+```
+
+- `--help`: Show command help.
+- `--version`, `-v`: Show version and exit.
+
+### `zcli search`
+
+Search items by text query.
+
+Syntax:
+
+```bash
+zcli search <query> [--limit <n>]
+```
+
+Arguments and options:
+
+- `<query>`: Search keyword, used for title/abstract matching.
+- `--limit`, `-l`: Maximum returned items. Default: `50`.
+
+Examples:
+
+```bash
+zcli search "machine learning"
+zcli search "vector database" --limit 10
+```
+
+Success data fields (per item):
+
+- `key`, `title`, `item_type`
+- `authors`, `year`
+- `abstract`, `doi`, `url`, `publication`, `pdf_path`
+
+Common errors:
+
+- Zotero path not configured.
+- Database file unavailable/locked for current access mode.
+
+### `zcli get`
+
+Get one item by Zotero key.
+
+Syntax:
+
+```bash
+zcli get <key>
+```
+
+Arguments:
+
+- `<key>`: Zotero item key, e.g. `ABCD1234`.
+
+Example:
+
+```bash
+zcli get ABCD1234
+```
+
+Common errors:
+
+- `Item not found: <key>`
+- Zotero path not configured.
+
+### `zcli collections`
+
+List all collections.
+
+Syntax:
+
+```bash
+zcli collections
+```
+
+Success data fields (per collection):
+
+- `collection_id`, `key`, `name`
+- `parent_id`, `parent_key`
+
+### `zcli tags`
+
+List all tags with item count.
+
+Syntax:
+
+```bash
+zcli tags
+```
+
+Success data fields (per tag):
+
+- `tag_id`, `name`, `count`
+
+### `zcli config init`
+
+Auto-detect and persist Zotero data directory.
+
+Syntax:
+
+```bash
+zcli config init
+```
+
+Success data fields:
+
+- `message`, `data_dir`, `read_only`, `config_file`
+
+### `zcli config show`
+
+Show active configuration.
+
+Syntax:
+
+```bash
+zcli config show
+```
+
+Success data fields:
+
+- `data_dir`: Current Zotero data directory.
+- `read_only`: Database access mode (`true` by default).
+- `source`: Config source (`environment`, `config file`, `auto-detect`).
+- `config_file`: Config file location.
+
+### `zcli config set`
+
+Set one configuration key/value.
+
+Syntax:
+
+```bash
+zcli config set <key> <value>
+```
+
+Supported keys:
+
+- `data_dir <path>`: Directory containing `zotero.sqlite`.
+- `read_only <true|false>`: Toggle SQLite open mode (default: `true`).
+  - Accepted boolean values: `true/false`, `1/0`, `yes/no`, `on/off`.
+
+Examples:
+
+```bash
+zcli config set data_dir ~/Zotero
+zcli config set read_only true
+zcli config set read_only false
+```
+
+Common errors:
+
+- `Unknown configuration key`
+- `Directory does not exist`
+- `Not a valid Zotero data directory (missing zotero.sqlite)`
+- `Invalid value for read_only`
+
 ## Configuration
 
 Configuration is stored in `~/.zcli/config.json`:
