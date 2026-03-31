@@ -1,6 +1,5 @@
 **/build
 node_modules
-package-lock.json
 zotero-cmd.json
 pnpm-lock.yaml
 index.html
