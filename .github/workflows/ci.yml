@@ -60,17 +60,33 @@ jobs:
 
       - name: Install dependencies
         working-directory: cli
+        shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          if command -v make >/dev/null 2>&1; then
+            make deps
+          else
+            pip install -e ".[dev]"
+          fi
 
       - name: Run tests
         working-directory: cli
-        run: pytest tests/ -v
+        shell: bash
+        run: |
+          if command -v make >/dev/null 2>&1; then
+            make test-unit
+          else
+            pytest tests/ -v
+          fi
 
       - name: Test CLI commands
         working-directory: cli
+        shell: bash
         run: |
-          zcli --help
-          zcli --version
-          zcli config --help
+          if command -v make >/dev/null 2>&1; then
+            make test
+          else
+            zcli --help
+            zcli --version
+            zcli config --help
+          fi
