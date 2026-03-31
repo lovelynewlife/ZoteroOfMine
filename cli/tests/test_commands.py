@@ -4,6 +4,7 @@ import pytest
 
 from zotero_cli.commands import (
     cmd_config_show,
+    cmd_config_set,
     output_json,
 )
 from zotero_cli.config import Config
@@ -31,4 +32,12 @@ class TestCommands:
         result = cmd_config_show(config)
         assert '"success": true' in result
         assert '"data_dir"' in result
+        assert '"read_only"' in result
         assert '"source"' in result
+
+    def test_cmd_config_set_read_only(self):
+        """Test setting read_only config."""
+        config = Config()
+        result = cmd_config_set(config, "read_only", "false")
+        assert '"success": true' in result
+        assert '"read_only": false' in result

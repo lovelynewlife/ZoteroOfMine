@@ -66,7 +66,7 @@ jobs:
           if command -v make >/dev/null 2>&1; then
             make deps
           else
-            pip install -e ".[dev]"
+            pip install -e ".[dev,mcp]"
           fi
 
       - name: Run tests
@@ -89,4 +89,14 @@ jobs:
             zcli --help
             zcli --version
             zcli config --help
+          fi
+
+      - name: Test MCP server
+        working-directory: cli
+        shell: bash
+        run: |
+          if command -v make >/dev/null 2>&1; then
+            make test-mcp
+          else
+            PYTHONPATH=src python -c "import anyio; from zotero_cli.mcp_server import create_server; s=create_server(); print([t.name for t in anyio.run(s.list_tools)])"
           fi

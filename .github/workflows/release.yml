@@ -47,12 +47,15 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             executable: zcli
+            mcp_executable: zcli-mcp
           - os: windows-latest
             platform: windows
             executable: zcli.exe
+            mcp_executable: zcli-mcp.exe
           - os: macos-latest
             platform: macos
             executable: zcli
+            mcp_executable: zcli-mcp
 
     steps:
       - name: Checkout code
@@ -71,7 +74,7 @@ jobs:
           if command -v make >/dev/null 2>&1; then
             make deps
           else
-            pip install -e ".[dev]"
+            pip install -e ".[dev,mcp]"
           fi
 
       - name: Run tests
@@ -90,6 +93,7 @@ jobs:
         run: |
           if command -v make >/dev/null 2>&1; then
             make build
+            make build-mcp
           else
             pyinstaller --onefile --name zcli \
               --paths src \
@@ -102,6 +106,20 @@ jobs:
               --exclude-module pytest \
               --exclude-module tests \
               entrypoint.py
+
+            pyinstaller --onefile --name zcli-mcp \
+              --paths src \
+              --hidden-import zotero_cli \
+              --hidden-import zotero_cli.mcp_server \
+              --hidden-import zotero_cli.config \
+              --hidden-import zotero_cli.database \
+              --hidden-import zotero_cli.models \
+              --hidden-import zotero_cli.commands \
+              --hidden-import mcp \
+              --hidden-import mcp.server.fastmcp \
+              --exclude-module pytest \
+              --exclude-module tests \
+              entrypoint_mcp.py
           fi
 
       - name: Test executable
@@ -111,11 +129,49 @@ jobs:
           ./dist/${{ matrix.executable }} --help
           ./dist/${{ matrix.executable }} --version
 
+      - name: Test MCP executable
+        working-directory: cli
+        shell: bash
+        run: |
+          test -f ./dist/${{ matrix.mcp_executable }}
+          python - <<'PY'
+          import anyio
+          from mcp import ClientSession
+          from mcp.client.stdio import StdioServerParameters, stdio_client
+
+          server_cmd = "./dist/${{ matrix.mcp_executable }}"
+
+          async def main():
+              params = StdioServerParameters(command=server_cmd, args=[])
+              async with stdio_client(params) as (read_stream, write_stream):
+                  async with ClientSession(read_stream, write_stream) as session:
+                      await session.initialize()
+                      tools = await session.list_tools()
+                      names = {tool.name for tool in tools.tools}
+                      required = {
+                          "zcli_search_items",
+                          "zcli_get_item",
+                          "zcli_list_collections",
+                          "zcli_list_tags",
+                          "zcli_show_config",
+                          "zcli_init_config",
+                          "zcli_set_data_dir",
+                      }
+                      missing = required - names
+                      if missing:
+                          raise RuntimeError(f"Missing tools: {sorted(missing)}")
+                      print("MCP tools ok:", sorted(names))
+
+          anyio.run(main)
+          PY
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zcli-${{ matrix.platform }}
-          path: cli/dist/${{ matrix.executable }}
+          path: |
+            cli/dist/${{ matrix.executable }}
+            cli/dist/${{ matrix.mcp_executable }}
           retention-days: 1
 
   # Create GitHub Release with all artifacts
@@ -157,9 +213,12 @@ jobs:
           mkdir -p release
           mv artifacts/plugin/zoteroofmine.xpi release/
           mv artifacts/linux/zcli release/zcli-linux-x64
+          mv artifacts/linux/zcli-mcp release/zcli-mcp-linux-x64
           mv artifacts/windows/zcli.exe release/zcli-windows-x64.exe
+          mv artifacts/windows/zcli-mcp.exe release/zcli-mcp-windows-x64.exe
           mv artifacts/macos/zcli release/zcli-macos-x64
-          chmod +x release/zcli-linux-x64 release/zcli-macos-x64
+          mv artifacts/macos/zcli-mcp release/zcli-mcp-macos-x64
+          chmod +x release/zcli-linux-x64 release/zcli-macos-x64 release/zcli-mcp-linux-x64 release/zcli-mcp-macos-x64
 
       - name: Create SHA256 checksums
         working-directory: release
@@ -188,6 +247,13 @@ jobs:
             | Windows (x64) | `zcli-windows-x64.exe` |
             | macOS (x64) | `zcli-macos-x64` |
             
+            ### MCP Server (zcli-mcp)
+            | Platform | File |
+            |----------|------|
+            | Linux (x64) | `zcli-mcp-linux-x64` |
+            | Windows (x64) | `zcli-mcp-windows-x64.exe` |
+            | macOS (x64) | `zcli-mcp-macos-x64` |
+            
             ### Checksums
             See `checksums.txt` for SHA256 checksums.
             
@@ -200,8 +266,16 @@ jobs:
             **CLI Tool:**
             ```bash
             # Linux/macOS
-            chmod +x zcli-*
-            sudo mv zcli-* /usr/local/bin/zcli
+            chmod +x zcli-linux-x64   # or zcli-macos-x64
+            sudo mv zcli-linux-x64 /usr/local/bin/zcli
+            ```
+
+            **MCP Server:**
+            ```bash
+            # Linux/macOS
+            chmod +x zcli-mcp-linux-x64   # or zcli-mcp-macos-x64
+            sudo mv zcli-mcp-linux-x64 /usr/local/bin/zcli-mcp
+            codex mcp add zcli -- zcli-mcp
             ```
             
             ```powershell

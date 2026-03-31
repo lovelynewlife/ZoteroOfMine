@@ -23,7 +23,7 @@ def cmd_search(config: Config, query: str, limit: int = 50) -> str:
     if not config.database_path:
         return output_json([], success=False, error="Zotero data directory not configured. Run 'zcli config init' first.")
 
-    db = Database(config.database_path)
+    db = Database(config.database_path, read_only=config.read_only)
     try:
         items = db.search_items(query, limit=limit)
         return output_json([item.to_dict() for item in items])
@@ -38,7 +38,7 @@ def cmd_get(config: Config, key: str) -> str:
     if not config.database_path:
         return output_json({}, success=False, error="Zotero data directory not configured. Run 'zcli config init' first.")
 
-    db = Database(config.database_path, config.data_dir)
+    db = Database(config.database_path, config.data_dir, read_only=config.read_only)
     try:
         item = db.get_item(key)
         if item:
@@ -56,7 +56,7 @@ def cmd_collections(config: Config) -> str:
     if not config.database_path:
         return output_json([], success=False, error="Zotero data directory not configured. Run 'zcli config init' first.")
 
-    db = Database(config.database_path)
+    db = Database(config.database_path, read_only=config.read_only)
     try:
         collections = db.get_collections()
         return output_json([c.to_dict() for c in collections])
@@ -71,7 +71,7 @@ def cmd_tags(config: Config) -> str:
     if not config.database_path:
         return output_json([], success=False, error="Zotero data directory not configured. Run 'zcli config init' first.")
 
-    db = Database(config.database_path)
+    db = Database(config.database_path, read_only=config.read_only)
     try:
         tags = db.get_tags()
         return output_json([t.to_dict() for t in tags])
@@ -93,6 +93,7 @@ def cmd_config_init(config: Config) -> str:
             return output_json({
                 "message": "Configuration initialized",
                 "data_dir": str(detected),
+                "read_only": config.read_only,
                 "config_file": "~/.zcli/config.json",
             })
         else:
@@ -105,6 +106,7 @@ def cmd_config_show(config: Config) -> str:
     """Show current configuration."""
     return output_json({
         "data_dir": str(config.data_dir) if config.data_dir else None,
+        "read_only": config.read_only,
         "source": config.source,
         "config_file": "~/.zcli/config.json",
     })
@@ -124,8 +126,24 @@ def cmd_config_set(config: Config, key: str, value: str) -> str:
             return output_json({
                 "message": f"Set {key} = {path}",
                 "data_dir": str(path),
+                "read_only": config.read_only,
             })
         else:
             return output_json({}, success=False, error="Failed to save configuration")
+    elif key == "read_only":
+        read_only = Config.parse_bool(value)
+        if read_only is None:
+            return output_json(
+                {},
+                success=False,
+                error="Invalid value for read_only. Use true/false (or 1/0, yes/no, on/off).",
+            )
+
+        config.set_read_only(read_only)
+        return output_json({
+            "message": f"Set {key} = {read_only}",
+            "read_only": read_only,
+        })
+
     else:
         return output_json({}, success=False, error=f"Unknown configuration key: {key}")

@@ -11,17 +11,26 @@ from .models import Collection, Item, Tag
 class Database:
     """Zotero SQLite database wrapper."""
 
-    def __init__(self, db_path: Path, data_dir: Optional[Path] = None):
+    def __init__(self, db_path: Path, data_dir: Optional[Path] = None, read_only: bool = True):
         self.db_path = db_path
         self.data_dir = data_dir or db_path.parent
+        self.read_only = read_only
         self._conn: Optional[sqlite3.Connection] = None
 
     def connect(self) -> None:
         """Open database connection."""
+        mode = "ro" if self.read_only else "rw"
+        db_uri = f"{self.db_path.resolve().as_uri()}?mode={mode}"
         self._conn = sqlite3.connect(
-            self.db_path, uri=True, check_same_thread=False
+            db_uri,
+            uri=True,
+            check_same_thread=False,
+            timeout=5.0,
         )
         self._conn.row_factory = sqlite3.Row
+        if self.read_only:
+            self._conn.execute("PRAGMA query_only = ON")
+        self._conn.execute("PRAGMA busy_timeout = 5000")
 
     def close(self) -> None:
         """Close database connection."""

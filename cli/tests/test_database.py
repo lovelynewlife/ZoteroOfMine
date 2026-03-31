@@ -1,6 +1,7 @@
 """Unit tests for database module."""
 
 import pytest
+import sqlite3
 from pathlib import Path
 
 from zotero_cli.database import Database
@@ -9,6 +10,40 @@ from zotero_cli.models import Item, Collection, Tag
 
 class TestDatabase:
     """Tests for Database class."""
+
+    def test_database_connect_is_read_only(self, tmp_path: Path):
+        """Connection should be read-only to avoid write locks/conflicts."""
+        db_path = tmp_path / "readonly.sqlite"
+
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+        conn.commit()
+        conn.close()
+
+        db = Database(db_path)
+        try:
+            db.connect()
+            with pytest.raises(sqlite3.OperationalError):
+                db._ensure_connected().execute("INSERT INTO t (id) VALUES (1)")
+        finally:
+            db.close()
+
+    def test_database_connect_read_write_mode(self, tmp_path: Path):
+        """Read-write mode should allow writes when explicitly enabled."""
+        db_path = tmp_path / "readwrite.sqlite"
+
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+        conn.commit()
+        conn.close()
+
+        db = Database(db_path, read_only=False)
+        try:
+            db.connect()
+            db._ensure_connected().execute("INSERT INTO t (id) VALUES (1)")
+            db._ensure_connected().commit()
+        finally:
+            db.close()
 
     def test_database_connect(self, sample_db_path: Path | None):
         """Test database connection."""

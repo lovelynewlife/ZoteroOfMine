@@ -13,9 +13,13 @@ dev = [
     "pyinstaller>=6.0.0",
     "pytest>=8.0.0",
 ]
+mcp = [
+    "mcp>=1.0.0",
+]
 
 [project.scripts]
 zcli = "zotero_cli.main:app"
+zcli-mcp = "zotero_cli.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]
