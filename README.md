@@ -3,12 +3,14 @@
 [![Zotero Version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
+[![CI](https://github.com/lovelynewlife/ZoteroOfMine/actions/workflows/ci.yml/badge.svg)](https://github.com/lovelynewlife/ZoteroOfMine/actions/workflows/ci.yml)
+[![Release](https://github.com/lovelynewlife/ZoteroOfMine/actions/workflows/release.yml/badge.svg)](https://github.com/lovelynewlife/ZoteroOfMine/releases)
 
-A personal Zotero 7 plugin for tracking and managing PDF reading history, with an upcoming AI-powered research assistant.
+A personal Zotero 7 plugin and CLI tool for tracking and managing PDF reading history, with AI-powered research capabilities via LLM Tool Calling.
 
 ## ✨ Features
 
-### 📖 Reading History Management
+### 📖 Zotero Plugin - Reading History Management
 
 ![Reading History UI](./assets/readingHistoryUI.png)
 
@@ -26,204 +28,295 @@ A personal Zotero 7 plugin for tracking and managing PDF reading history, with a
 
 - **Bulk Deletion**: Select multiple entries using checkboxes and delete them together
 - **Time-Based Deletion**: Delete history from specific time periods:
-  - Last day
-  - Last week
-  - Last month
-  - Last 3 months
-  - Last 6 months
-  - Last year
+  - Last day, week, month, 3 months, 6 months, year
 - **Clear All**: Remove all history with a confirmation prompt
-- **Safe Operations**: All deletion operations require confirmation
 
-### ⚙️ Preference Settings
+### 🖥️ zcli - Command Line Interface
 
-Access via `Edit` → `Preferences` → `ZoteroOfMine`:
+A standalone CLI tool for querying your local Zotero database. Designed for LLM Tool Calling integration with AI assistants like Cherry Studio, Cursor, Claude Desktop, etc.
 
-- **Sidebar Visibility**: Toggle the "Reading History" button in the left sidebar
-- **Capture Cooldown**: Adjust the cooldown time (10-300 seconds) between captures for the same document
-
-### ⚡ Automatic Capture
-
-Automatically tracks when you read PDF documents:
-- Opening a PDF document in the built-in reader
-- Switching to an already opened PDF tab
-
-### 🛡️ Smart Capture Management
-
-- **Configurable Cooldown**: Prevents duplicate captures within a customizable time window
-- **Minimal Storage**: Only stores item ID and timestamp; all other data fetched from Zotero API
-- **Data Freshness**: Always displays up-to-date document information
-
-### 🌐 Internationalization
-
-- English (en-US)
-- Chinese (中文)
-
----
-
-### 🤖 Vibe Research (Coming Soon)
-
-An AI-powered research assistant that leverages your Zotero library for intelligent research workflows.
-
-**Status:** 🚧 Under Development
-
-**Planned Features:**
-- TBD
+**Key Features:**
+- 🚀 **Zero Dependencies**: Pure local SQLite access, no API keys required
+- 🔍 **Full-Text Search**: Search by title, authors, abstract
+- 📚 **Collection & Tag Management**: List all collections and tags
+- 📄 **PDF Path Resolution**: Get full PDF file paths for attachments
+- 🤖 **LLM Ready**: JSON output format, perfect for Tool Calling
 
 ---
 
 ## 📦 Installation
 
-### From Release (Recommended)
+### Zotero Plugin
 
-1. Download the latest `zotero-of-mine.xpi` from the [Releases](https://github.com/lovelynewlife/ZoteroOfMine/releases) page
+#### From Release (Recommended)
+
+1. Download the latest `zoteroofmine.xpi` from the [Releases](https://github.com/lovelynewlife/ZoteroOfMine/releases) page
 2. Open Zotero 7
 3. Go to `Tools` → `Add-ons`
 4. Click the gear icon → `Install Add-on From File`
 5. Select the downloaded `.xpi` file
 
-### From Source
+#### From Source
 
 ```bash
-# Clone the repository
 git clone https://github.com/lovelynewlife/ZoteroOfMine.git
 cd ZoteroOfMine
-
-# Install dependencies
 pnpm install
-
-# Build the plugin
 pnpm run build
+# Plugin: build/zoteroofmine.xpi
 ```
 
-The built plugin will be located at `build/zotero-of-mine.xpi`.
+### zcli CLI Tool
+
+#### Option 1: Download Binary (Recommended)
+
+Download from [Releases](https://github.com/lovelynewlife/ZoteroOfMine/releases):
+
+| Platform | File |
+|----------|------|
+| Linux (x64) | `zcli-linux-x64` |
+| Windows (x64) | `zcli-windows-x64.exe` |
+| macOS (x64) | `zcli-macos-x64` |
+
+```bash
+# Linux/macOS
+chmod +x zcli-*
+sudo mv zcli-* /usr/local/bin/zcli
+```
+
+#### Option 2: Install via pip
+
+```bash
+pip install git+https://github.com/lovelynewlife/ZoteroOfMine.git#subdirectory=cli
+```
+
+#### Option 3: Run with uvx
+
+```bash
+uvx --from git+https://github.com/lovelynewlife/ZoteroOfMine.git#subdirectory=cli zcli
+```
+
+---
 
 ## 🚀 Usage
 
-### Viewing History
+### Zotero Plugin
+
+#### Viewing History
 
 1. Click the "Reading History" / "阅读历史" button at the bottom left of Zotero
 2. The history dialog will show all tracked reading sessions
 
-### Opening Documents
+#### Opening Documents
 
-Double-click any row in the history table to open the corresponding document in Zotero.
+Double-click any row in the history table to open the corresponding document.
 
-### Searching
+#### Deleting History
 
-Type in the search box to filter history by document title or author name.
+- **Selected Items**: Check boxes → "Delete Selected"
+- **Time Period**: Click time button (e.g., "Last Week")
+- **All**: Click "Clear All"
 
-### Deleting History
+### zcli CLI Tool
 
-#### Delete Selected Items
+#### Quick Start
 
-1. Check the checkboxes next to entries you want to delete
-2. Click the "Delete Selected" / "删除选中" button
-3. Confirm the deletion
+```bash
+# Show help
+zcli --help
 
-#### Delete by Time Period
+# Show version
+zcli --version
 
-1. Click any time period button (e.g., "Last Week", "Last Month")
-2. Confirm the deletion
+# Configure Zotero data directory
+zcli config detect                    # Auto-detect
+zcli config set ~/Zotero              # Manual set
+zcli config show                      # Show current config
 
-#### Clear All History
+# Search items
+zcli search "machine learning" --limit 10
 
-1. Click the "Clear All" / "清除全部" button
-2. Confirm the deletion
+# Get item details
+zcli get XQRMYQUN
+
+# List collections
+zcli collections
+
+# List tags
+zcli tags
+```
+
+#### Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `zcli search <query>` | Full-text search by title, authors, abstract |
+| `zcli get <key>` | Get detailed item information |
+| `zcli collections` | List all collections |
+| `zcli tags` | List all tags |
+| `zcli config show` | Show current configuration |
+| `zcli config set <path>` | Set Zotero data directory |
+| `zcli config detect` | Auto-detect Zotero data directory |
+
+#### Configuration Priority
+
+1. **Environment Variable**: `ZOTERO_DATA_DIR`
+2. **Config File**: `~/.zcli/config.json`
+3. **Auto-Detect**: Search common paths
+
+```bash
+# Using environment variable
+export ZOTERO_DATA_DIR=~/Zotero
+zcli search "database"
+```
+
+#### Output Format
+
+All commands output JSON for easy parsing by LLMs:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "key": "XQRMYQUN",
+      "title": "Paper Title",
+      "authors": ["Author 1", "Author 2"],
+      "year": 2024,
+      "pdf_path": "/path/to/paper.pdf"
+    }
+  ]
+}
+```
+
+#### LLM Tool Calling Integration
+
+Configure `zcli` as a tool in your AI client:
+
+```json
+{
+  "name": "zcli_search",
+  "description": "Search Zotero library for papers",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string" }
+    },
+    "required": ["query"]
+  }
+}
+```
+
+The AI can then execute: `zcli search "your query" --limit 5`
+
+---
 
 ## 🔧 Development
 
 ### Prerequisites
 
 - Node.js 18+
+- Python 3.10+
 - pnpm
 
 ### Setup
 
 ```bash
-# Install dependencies
+# Clone
+git clone https://github.com/lovelynewlife/ZoteroOfMine.git
+cd ZoteroOfMine
+
+# Plugin development
 pnpm install
+pnpm run start-watch    # Hot-reload mode
 
-# Development mode with hot-reload
-pnpm run start-watch
-
-# Production build
-pnpm run build
+# CLI development
+cd cli
+pip install -e ".[dev]"
+pytest tests/ -v        # Run tests
 ```
 
 ### Project Structure
 
 ```
 ZoteroOfMine/
-├── addon/                    # Add-on resources
-│   ├── assets/              # Icons and images
-│   ├── locale/              # i18n translations
-│   │   ├── en-US/
-│   │   └── zh-CN/
+├── addon/                    # Plugin resources
+│   ├── assets/              # Icons
+│   ├── locale/              # i18n (en-US, zh-CN)
 │   └── chrome/              # UI styles
 ├── src/
 │   ├── modules/
-│   │   ├── historyStore.ts        # Storage layer (JSON persistence)
-│   │   ├── historyPreferences.ts  # Preference management
-│   │   ├── historyPreferenceScript.ts # Preference UI
-│   │   ├── readingHistory.ts      # Reading history UI & capture logic
-│   │   └── vibeResearch.ts        # Vibe Research module (WIP)
+│   │   ├── historyStore.ts        # Storage layer
+│   │   ├── readingHistory.ts      # History UI
+│   │   └── vibeResearch.ts        # AI module (WIP)
 │   └── utils/
 │       └── zdb.ts           # Zotero DB helpers
-├── typings/                  # TypeScript declarations
+├── cli/                      # zcli CLI tool
+│   ├── src/zotero_cli/
+│   │   ├── main.py          # CLI entry point
+│   │   ├── commands.py      # Command handlers
+│   │   ├── database.py      # SQLite queries
+│   │   ├── config.py        # Configuration
+│   │   └── models.py        # Data models
+│   ├── tests/               # pytest tests
+│   └── pyproject.toml
+├── .github/workflows/        # CI/CD
 └── package.json
 ```
 
 ### Building
 
 ```bash
-# Build for production
+# Build plugin
 pnpm run build
+# → build/zoteroofmine.xpi
 
-# The plugin will be built to:
-# build/zotero-of-mine.xpi
+# Build CLI binary
+cd cli && make build
+# → dist/zcli
 ```
+
+### Testing
+
+```bash
+# Plugin (TypeScript)
+pnpm run tsc
+
+# CLI (Python)
+cd cli && pytest tests/ -v
+```
+
+---
 
 ## 💾 Data Storage
 
-### Location
+### Plugin Data
 
 Reading history is stored in:
 ```
-{Zotero Profile Directory}/zoteroofmine_history.json
+{Zotero Profile}/zoteroofmine_history.json
 ```
 
-### Format
+### CLI Config
 
-```json
-{
-  "version": 1,
-  "entries": [
-    {
-      "itemID": 123,
-      "captureTime": 1700000000000
-    }
-  ]
-}
+Configuration stored in:
+```
+~/.zcli/config.json
 ```
 
-### Storage Strategy
-
-- **Minimal Storage**: Only item ID and timestamp are stored
-- **Fresh Data**: Document details (title, authors, etc.) are fetched from Zotero API on demand
-- **Lightweight**: History file stays small even with thousands of entries
+---
 
 ## 🛠️ Tech Stack
 
-- **TypeScript** - Type-safe development
-- **zotero-plugin-toolkit** - Zotero plugin development utilities
-- **zotero-types** - TypeScript types for Zotero API
-- **IOUtils / PathUtils** - Firefox/Zotero 7 native file APIs
+- **Plugin**: TypeScript, zotero-plugin-toolkit, zotero-types
+- **CLI**: Python 3.10+, Typer, PyInstaller
+- **Database**: SQLite (Zotero's zotero.sqlite)
 
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions welcome! Please submit a Pull Request.
 
 ## 📄 License
 
@@ -236,5 +329,4 @@ AGPL-3.0-or-later - see [LICENSE](LICENSE) for details.
 
 ## 📧 Support
 
-For issues and questions:
-- Create an issue on [GitHub Issues](https://github.com/lovelynewlife/ZoteroOfMine/issues)
+- [GitHub Issues](https://github.com/lovelynewlife/ZoteroOfMine/issues)
