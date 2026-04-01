@@ -1,0 +1,4 @@
+interface:
+  display_name: "ZCLI Tool Calling"
+  short_description: "Call zcli CLI/MCP safely and return structured Zotero results."
+  default_prompt: "Use this skill to configure and call zcli tools, then summarize JSON outputs with clear next steps."

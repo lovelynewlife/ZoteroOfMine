@@ -82,6 +82,27 @@ codex mcp add zcli -- zcli-mcp
 
 ---
 
+## 🤖 Codex Skill Distribution (zcli)
+
+The repo ships a ready-to-distribute Codex skill for `zcli` tool calling:
+
+- `skills/zcli-tool-calling/`
+- `skills/zcli-tool-calling/SKILL.md`
+- `skills/zcli-tool-calling/agents/openai.yaml`
+- `skills/zcli-tool-calling/references/`
+
+Distribution steps:
+1. Copy `skills/zcli-tool-calling` to the target machine's Codex skills directory.
+2. Use `CODEX_HOME/skills` if `CODEX_HOME` is set; otherwise use `~/.codex/skills`.
+3. Restart Codex to re-index skills.
+
+Example:
+```bash
+cp -R skills/zcli-tool-calling "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+---
+
 ## 🚀 Usage
 
 ### Zotero Plugin
