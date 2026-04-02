@@ -85,6 +85,16 @@ def cmd_config_init(config: Config) -> str:
     """Initialize configuration interactively."""
     from .config import detect_zotero_data_dir
 
+    # If configuration already exists, keep it without overwriting
+    if config.data_dir is not None:
+        return output_json({
+            "message": "Using existing configuration",
+            "data_dir": str(config.data_dir) if config.data_dir else None,
+            "read_only": config.read_only,
+            "source": config.source,
+            "config_file": "~/.zcli/config.json",
+        })
+
     detected = detect_zotero_data_dir()
 
     if detected:

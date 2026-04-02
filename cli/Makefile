@@ -59,9 +59,9 @@ help:
 	@echo "  make build        Build standalone executable for current platform"
 	@echo "  make build-mcp    Build standalone MCP server executable"
 	@echo "  make build-tools  Build zcli and zcli-mcp executables"
-	@echo "  make install      Install built executable to $(BINDIR)"
-	@echo "  make install-mcp  Install built MCP executable to $(BINDIR)"
-	@echo "  make install-tools Install both zcli and zcli-mcp to $(BINDIR)"
+	@echo "  make install      Install both zcli and zcli-mcp to $(BINDIR)"
+	@echo "  make install-mcp  Install built MCP executable only to $(BINDIR)"
+	@echo "  make install-tools Deprecated, same as make install"
 	@echo "  make install-py   Install Python package via pip"
 	@echo "  make test-unit    Run unit tests"
 	@echo "  make test-mcp     Run MCP smoke test"
@@ -120,7 +120,7 @@ build-linux:
 	$(MAKE) build
 
 ifeq ($(OS),Windows_NT)
-install: build
+install: build-tools
 	@echo "Binary install target is not supported on Windows."
 	@echo "Use 'make install-py' instead."
 	@exit 1
@@ -139,10 +139,11 @@ uninstall:
 	@echo "Use 'pip uninstall zcli' to remove Python installation on Windows."
 else
 # Install built executable to system path (override PREFIX/BINDIR as needed)
-install: build
+install: build-tools
 	install -d "$(DESTDIR)$(BINDIR)"
 	install -m 755 "$(BIN_PATH)" "$(DESTDIR)$(BINDIR)/$(APP_NAME)"
-	@echo "Installed: $(DESTDIR)$(BINDIR)/$(APP_NAME)"
+	install -m 755 "$(MCP_BIN_PATH)" "$(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
+	@echo "Installed: $(DESTDIR)$(BINDIR)/$(APP_NAME) and $(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
 
 install-mcp: build-mcp
 	install -d "$(DESTDIR)$(BINDIR)"
