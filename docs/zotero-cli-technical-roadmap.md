@@ -253,3 +253,89 @@ Execution Flow:
 - Shared configuration
 - Custom workflow tools
 
+---
+
+## Semantic Search (Future Enhancement)
+
+### Problem with Current Search
+
+Current `LIKE` query has limitations:
+
+| Limitation | Example |
+|------------|---------|
+| Keyword matching | "ML" won't find "Machine Learning" |
+| No synonyms | "neural network" won't find "deep learning" |
+| No semantic understanding | "optimization" won't find "gradient descent" |
+| Cross-language | Chinese query won't find English papers |
+
+### Design Options
+
+#### Option A: Local Embedding (Recommended)
+
+| Aspect | Choice |
+|--------|--------|
+| Embedding Model | sentence-transformers (all-MiniLM-L6-v2) |
+| Vector Storage | sqlite-vss or ChromaDB |
+| Query | Cosine similarity search |
+
+**Flow:**
+```
+1. Extract title + abstract from items
+2. Generate embeddings locally (offline, privacy)
+3. Store vectors in SQLite extension or separate file
+4. Query: generate query embedding → compute similarity → return top-k
+```
+
+**Pros:** Fully offline, privacy, no API cost
+**Cons:** First-time indexing takes time, model download required
+
+#### Option B: Cloud Embedding API
+
+| Aspect | Choice |
+|--------|--------|
+| API | OpenAI / Cohere / Jina AI |
+| Storage | Local SQLite with vector column |
+
+**Pros:** Higher quality, multilingual support
+**Cons:** Requires API key, cost, network dependency
+
+#### Option C: Hybrid Search
+
+```
+1. LIKE query for coarse filtering
+2. Vector similarity for fine ranking
+```
+
+**Pros:** Balance of speed and accuracy
+**Cons:** Higher implementation complexity
+
+### Proposed Commands
+
+```bash
+# Current keyword search
+zcli search "machine learning"
+
+# Future: semantic search
+zcli search "machine learning" --semantic
+
+# Find similar papers
+zcli similar XQRMYQUN --limit 10
+```
+
+### Implementation Phases
+
+| Phase | Description | Effort |
+|-------|-------------|--------|
+| Phase 1 | `zcli similar` using Zotero's built-in relatedItems | Low |
+| Phase 2 | Local embedding with sentence-transformers | Medium |
+| Phase 3 | Hybrid retrieval + incremental updates | High |
+
+### Recommendation
+
+**Not a priority** for current phase. Consider when:
+- Users frequently report "can't find relevant papers"
+- Need for cross-language search emerges
+- "Find similar papers" becomes a common request
+
+For now, keyword search is sufficient for most use cases.
+
