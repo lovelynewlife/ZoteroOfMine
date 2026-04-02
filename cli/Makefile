@@ -18,11 +18,26 @@ else
 BIN_EXT :=
 endif
 
+ifeq ($(PYINSTALLER_MODE),onefile)
 BIN_PATH := $(DIST_DIR)/$(APP_NAME)$(BIN_EXT)
 MCP_BIN_PATH := $(DIST_DIR)/$(MCP_APP_NAME)$(BIN_EXT)
+else
+BIN_PATH := $(DIST_DIR)/$(APP_NAME)/$(APP_NAME)$(BIN_EXT)
+MCP_BIN_PATH := $(DIST_DIR)/$(MCP_APP_NAME)/$(MCP_APP_NAME)$(BIN_EXT)
+endif
+
+# Default to onedir for faster startup
+# Use make build-onefile for single-file executable (slower startup but easier distribution)
+PYINSTALLER_MODE ?= onedir
+
+ifeq ($(PYINSTALLER_MODE),onefile)
+PYINSTALLER_ONEFILE := --onefile
+else
+PYINSTALLER_ONEFILE := --onedir
+endif
 
 PYINSTALLER_ARGS := \
-	--onefile \
+	$(PYINSTALLER_ONEFILE) \
 	--name $(APP_NAME) \
 	--paths src \
 	--hidden-import zotero_cli \
@@ -36,7 +51,7 @@ PYINSTALLER_ARGS := \
 	$(ENTRYPOINT)
 
 PYINSTALLER_MCP_ARGS := \
-	--onefile \
+	$(PYINSTALLER_ONEFILE) \
 	--name $(MCP_APP_NAME) \
 	--paths src \
 	--hidden-import zotero_cli \
@@ -56,7 +71,8 @@ all: build
 help:
 	@echo "Common targets:"
 	@echo "  make deps         Install dev/build dependencies (includes MCP)"
-	@echo "  make build        Build standalone executable for current platform"
+	@echo "  make build        Build standalone executable for current platform (default: onedir, faster startup)"
+	@echo "  make build-onefile Build single-file standalone executable (slower startup, easier distribution)"
 	@echo "  make build-mcp    Build standalone MCP server executable"
 	@echo "  make build-tools  Build zcli and zcli-mcp executables"
 	@echo "  make install      Install both zcli and zcli-mcp to $(BINDIR)"
@@ -82,10 +98,15 @@ deps-mcp:
 # Backward-compatible alias for old dependency install behavior
 install-dev: deps
 
-# Build for current platform
+# Build for current platform (default onedir mode)
 build: deps-build
 	$(PYINSTALLER) $(PYINSTALLER_ARGS)
 	@echo "Output: $(BIN_PATH)"
+
+# Build single-file executable (slower startup but easier distribution)
+build-onefile: deps-build
+	$(MAKE) build PYINSTALLER_MODE=onefile
+	@echo "Output: $(BIN_PATH) (single-file mode)"
 
 # Build MCP server executable for current platform
 build-mcp: deps-build deps-mcp
@@ -139,15 +160,33 @@ uninstall:
 	@echo "Use 'pip uninstall zcli' to remove Python installation on Windows."
 else
 # Install built executable to system path (override PREFIX/BINDIR as needed)
+# For onedir mode: install entire directory and create symlink
 install: build-tools
+	install -d "$(DESTDIR)$(PREFIX)/$(APP_NAME)"
+	install -d "$(DESTDIR)$(PREFIX)/$(MCP_APP_NAME)"
 	install -d "$(DESTDIR)$(BINDIR)"
+ifeq ($(PYINSTALLER_MODE),onefile)
 	install -m 755 "$(BIN_PATH)" "$(DESTDIR)$(BINDIR)/$(APP_NAME)"
 	install -m 755 "$(MCP_BIN_PATH)" "$(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
+else
+	# Copy entire onedir build
+	cp -a "$(DIST_DIR)/$(APP_NAME)"/. "$(DESTDIR)$(PREFIX)/$(APP_NAME)/"
+	cp -a "$(DIST_DIR)/$(MCP_APP_NAME)"/. "$(DESTDIR)$(PREFIX)/$(MCP_APP_NAME)/"
+	# Create symlink to BINDIR
+	ln -sf "$(DESTDIR)$(PREFIX)/$(APP_NAME)/$(APP_NAME)" "$(DESTDIR)$(BINDIR)/$(APP_NAME)"
+	ln -sf "$(DESTDIR)$(PREFIX)/$(MCP_APP_NAME)/$(MCP_APP_NAME)" "$(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
+endif
 	@echo "Installed: $(DESTDIR)$(BINDIR)/$(APP_NAME) and $(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
 
 install-mcp: build-mcp
+	install -d "$(DESTDIR)$(PREFIX)/$(MCP_APP_NAME)"
 	install -d "$(DESTDIR)$(BINDIR)"
+ifeq ($(PYINSTALLER_MODE),onefile)
 	install -m 755 "$(MCP_BIN_PATH)" "$(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
+else
+	cp -a "$(DIST_DIR)/$(MCP_APP_NAME)"/. "$(DESTDIR)$(PREFIX)/$(MCP_APP_NAME)/"
+	ln -sf "$(DESTDIR)$(PREFIX)/$(MCP_APP_NAME)/$(MCP_APP_NAME)" "$(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
+endif
 	@echo "Installed: $(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
 
 install-tools: install install-mcp
@@ -155,7 +194,9 @@ install-tools: install install-mcp
 uninstall:
 	rm -f "$(DESTDIR)$(BINDIR)/$(APP_NAME)"
 	rm -f "$(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
-	@echo "Removed: $(DESTDIR)$(BINDIR)/$(APP_NAME) and $(DESTDIR)$(BINDIR)/$(MCP_APP_NAME)"
+	rm -rf "$(DESTDIR)$(PREFIX)/$(APP_NAME)"
+	rm -rf "$(DESTDIR)$(PREFIX)/$(MCP_APP_NAME)"
+	@echo "Removed: $(DESTDIR)$(BINDIR)/$(APP_NAME), $(DESTDIR)$(BINDIR)/$(MCP_APP_NAME) and build directories"
 endif
 
 # Install Python package via pip (virtualenv/system decided by current Python)
