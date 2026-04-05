@@ -188,7 +188,8 @@ jobs:
         run: |
           mkdir -p build-out/onedir
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            zip -r build-out/onedir/zcli-${{ matrix.platform }}-x64-onedir.zip dist/zcli/ dist/zcli-mcp/
+            # Use PowerShell Compress-Archive on Windows
+            powershell -Command "Compress-Archive -Path dist/zcli, dist/zcli-mcp -DestinationPath build-out/onedir/zcli-windows-x64-onedir.zip -Force"
           else
             tar -czf build-out/onedir/zcli-${{ matrix.platform }}-x64-onedir.tar.gz -C dist zcli/ zcli-mcp/
           fi
