@@ -6,9 +6,19 @@
 [![CI](https://github.com/lovelynewlife/ZoteroOfMine/actions/workflows/ci.yml/badge.svg)](https://github.com/lovelynewlife/ZoteroOfMine/actions/workflows/ci.yml)
 [![Release](https://github.com/lovelynewlife/ZoteroOfMine/actions/workflows/release.yml/badge.svg)](https://github.com/lovelynewlife/ZoteroOfMine/releases)
 
-A personal Zotero 7 plugin and CLI tool for tracking and managing PDF reading history, with AI-powered research capabilities via LLM Tool Calling.
+A personal Zotero 7 plugin and CLI tool for tracking and managing PDF reading history, with AI-powered research capabilities via LLM Tool Calling and CCP (Clipboard Context Protocol).
 
 ## ✨ Features
+
+### 📋 CCP - Clipboard Context Protocol
+
+Copy Zotero items as structured AI context via right-click menu:
+
+- **Right-click Menu**: Select items → "Copy as AI Context" / "拷贝为AI上下文"
+- **Single/Multiple Selection**: Support copying one or many items at once
+- **Structured Output**: CCP JSON format with item metadata (title, authors, year, DOI, URL, key)
+- **zcli Integration Hint**: Includes hint for AI clients to use zcli for deeper exploration
+- **Cross-Platform**: Works with any AI client that supports clipboard input
 
 ### 📖 Zotero Plugin - Reading History Management
 
@@ -82,7 +92,9 @@ codex mcp add zcli -- zcli-mcp
 
 ---
 
-## 🤖 Codex Skill Distribution (zcli)
+## 🤖 Codex Skill Distribution
+
+### zcli Tool Calling
 
 The repo ships a ready-to-distribute Codex skill for `zcli` tool calling:
 
@@ -101,11 +113,54 @@ Example:
 cp -R skills/zcli-tool-calling "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
+### CCP Context Protocol
+
+A distributable skill for AI clients to detect and parse CCP-formatted clipboard content:
+
+- `skills/ccp-context-protocol/`
+- `skills/ccp-context-protocol/SKILL.md`
+- `skills/ccp-context-protocol/agents/openai.yaml`
+- `skills/ccp-context-protocol/references/ccp-zcli-integration.md`
+
+This skill enables AI clients to:
+- Detect CCP-formatted clipboard content automatically
+- Parse structured context from Zotero items
+- Integrate with zcli for deeper exploration
+
+Distribution:
+```bash
+cp -R skills/ccp-context-protocol "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
 ---
 
 ## 🚀 Usage
 
 ### Zotero Plugin
+
+#### Copying as AI Context (CCP)
+
+1. Select one or multiple items in Zotero
+2. Right-click → "Copy as AI Context" / "拷贝为AI上下文"
+3. Paste into your AI client (Cherry Studio, Cursor, Claude, etc.)
+4. The AI client will receive structured context with item metadata
+
+**Example CCP Output:**
+```json
+{
+  "ccp": "1.0",
+  "source": "zotero",
+  "item": {
+    "key": "XQRMYQUN",
+    "title": "Attention Is All You Need",
+    "authors": ["Vaswani, A.", "Shazeer, N."],
+    "year": "2017",
+    "doi": "10.48550/arXiv.1706.03762",
+    "url": "https://arxiv.org/abs/1706.03762"
+  },
+  "hint": "You can use zcli commands..."
+}
+```
 
 #### Viewing History
 
@@ -162,12 +217,12 @@ ZoteroOfMine/
 ├── addon/                    # Plugin resources
 │   ├── assets/              # Icons
 │   ├── locale/              # i18n (en-US, zh-CN)
-│   └── chrome/              # UI styles
+│   └── chrome/              # UI styles & icons
 ├── src/
 │   ├── modules/
 │   │   ├── historyStore.ts        # Storage layer
 │   │   ├── readingHistory.ts      # History UI
-│   │   └── vibeResearch.ts        # AI module (WIP)
+│   │   └── ccpProducer.ts         # CCP context producer
 │   └── utils/
 │       └── zdb.ts           # Zotero DB helpers
 ├── cli/                      # zcli CLI tool
@@ -183,6 +238,9 @@ ZoteroOfMine/
 │   │   └── mcp_server.py    # MCP server for Codex/tool calling
 │   ├── tests/               # pytest tests
 │   └── pyproject.toml
+├── skills/                   # Distributable Codex skills
+│   ├── zcli-tool-calling/   # zcli tool calling skill
+│   └── ccp-context-protocol/ # CCP parsing skill
 ├── .github/workflows/        # CI/CD
 └── package.json
 ```
