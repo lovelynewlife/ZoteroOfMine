@@ -9,6 +9,7 @@ import { ReadingHistoryFactory } from "./modules/readingHistory";
 import { HistoryStorage } from "./modules/historyStore";
 import { HistoryPreferenceScript } from "./modules/historyPreferenceScript";
 import { VibeResearchFactory } from "./modules/vibeResearch";
+import { CCPProducerFactory } from "./modules/ccpProducer";
 import { config } from "../package.json";
 import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
@@ -86,6 +87,9 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   // === Vibe Research Feature (Placeholder) ===
   VibeResearchFactory.register();
 
+  // === CCP Producer (Copy as AI Context) ===
+  CCPProducerFactory.register();
+
   // Add mock data for testing (only if no real data exists)
   // const storage = HistoryStorage.getInstance();
   // await storage.ensureLoaded();
@@ -108,6 +112,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
   // Wait for reading history to save before unloading
   await ReadingHistoryFactory.unregister();
   VibeResearchFactory.unregister();
+  CCPProducerFactory.unregister();
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
 }

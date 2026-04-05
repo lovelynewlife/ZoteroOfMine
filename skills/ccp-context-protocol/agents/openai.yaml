@@ -1,0 +1,4 @@
+interface:
+  display_name: "CCP Context Protocol"
+  short_description: "Parse and process Clipboard Context Protocol data from Zotero for structured AI context."
+  default_prompt: "When user pastes content, detect CCP format and use zcli to explore Zotero items. Summarize context and suggest actions."

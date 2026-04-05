@@ -35,3 +35,10 @@ time-period-quarter = Last 3 Months
 time-period-half-year = Last 6 Months
 time-period-year = Last Year
 select-all-label = Select All
+
+# CCP (Clipboard Context Protocol)
+ccp-copy-as-context = Copy as AI Context
+ccp-copy-success = Copied to clipboard
+ccp-copy-success-multiple = Copied { $count } items to clipboard
+ccp-no-selection = No items selected
+ccp-copy-error = Failed to copy to clipboard
