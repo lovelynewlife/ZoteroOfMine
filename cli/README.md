@@ -12,12 +12,14 @@ pip install -e .
 
 ### From Executable (No Python Required)
 
-Download the appropriate executable for your platform from the releases page.
+Two formats are available on the releases page:
 
-### Binary Setup on End-User Machine
+| Format | Description | Startup Speed | Installation |
+|--------|-------------|---------------|--------------|
+| **Onefile (single executable)** | Single file download, easy to install | Slower (decompresses on every run) | `chmod +x` → move to `PATH` |
+| **Onedir (faster startup)** | Pre-extracted directory packaging | Fast (no decompression) | Extract → copy → symlink |
 
-1. Download release assets for your platform:
-`zcli-<platform>` and `zcli-mcp-<platform>`.
+#### Onefile Installation (easy)
 
 Linux (x64):
 
@@ -42,6 +44,22 @@ New-Item -ItemType Directory -Force C:\Tools\zcli | Out-Null
 Copy-Item .\zcli-windows-x64.exe C:\Tools\zcli\zcli.exe
 Copy-Item .\zcli-mcp-windows-x64.exe C:\Tools\zcli\zcli-mcp.exe
 setx PATH "$env:PATH;C:\Tools\zcli"
+```
+
+#### Onedir Installation (faster, recommended)
+
+Linux/macOS:
+
+```bash
+# Extract the archive
+tar -xzf zcli-<platform>-x64-onedir.tar.gz
+
+# Install to /usr/local
+sudo mkdir -p /usr/local/share
+sudo cp -a zcli /usr/local/share/zcli
+sudo cp -a zcli-mcp /usr/local/share/zcli-mcp
+sudo ln -sf /usr/local/share/zcli/zcli /usr/local/bin/zcli
+sudo ln -sf /usr/local/share/zcli-mcp/zcli-mcp /usr/local/bin/zcli-mcp
 ```
 
 2. Configure Zotero data path:
@@ -73,19 +91,27 @@ Or build it yourself:
 # Install build dependency
 make deps-build
 
-# Build for current platform
+# Build for current platform (default: onedir mode, faster startup)
 make build
-
-# Build MCP server executable for current platform
 make build-mcp
 
-# Install binary to system path (default: /usr/local/bin)
+# Build single-file executable (slower startup but easier distribution)
+make build-onefile
+make build-mcp PYINSTALLER_MODE=onefile
+
+# Install binary to system path (installs whatever mode you built)
 make install
 make install-mcp
+```
 
-# Output:
-#   dist/zcli and dist/zcli-mcp (Linux/macOS)
-#   dist/zcli.exe and dist/zcli-mcp.exe (Windows)
+**Output location by mode:**
+- `onedir` (default): `dist/zcli/zcli` and `dist/zcli-mcp/zcli-mcp`
+- `onefile`: `dist/zcli` and `dist/zcli-mcp` (single files)
+
+You can explicitly specify the mode for any target:
+```bash
+make build PYINSTALLER_MODE=onefile
+make install PYINSTALLER_MODE=onedir
 ```
 
 ## Usage
@@ -329,7 +355,8 @@ make deps
 
 ```bash
 make deps         # Install development/build dependencies
-make build        # Build for current platform
+make build        # Build for current platform (default: onedir, faster startup)
+make build-onefile # Build single-file executable (slower startup)
 make build-mcp    # Build MCP server executable
 make build-tools  # Build both zcli and zcli-mcp
 make install      # Install built binary to /usr/local/bin (override PREFIX/BINDIR)
@@ -341,6 +368,11 @@ make build-mac    # Build for macOS (run on macOS)
 make build-linux  # Build for Linux (run on Linux)
 make clean        # Clean build artifacts
 ```
+
+**Build mode selection:**
+- Default: `PYINSTALLER_MODE=onedir` - Faster startup for daily use
+- Override: `PYINSTALLER_MODE=onefile` for single-file distribution
+- Example: `make build PYINSTALLER_MODE=onefile`
 
 **Note:** PyInstaller does not support cross-compilation. You must run the build command on the target platform.
 

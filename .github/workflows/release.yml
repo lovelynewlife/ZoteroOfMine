@@ -87,13 +87,14 @@ jobs:
             pytest tests/ -v
           fi
 
-      - name: Build executable
+      - name: Build onefile (single executable)
         working-directory: cli
         shell: bash
         run: |
           if command -v make >/dev/null 2>&1; then
-            make build
-            make build-mcp
+            make clean
+            make build PYINSTALLER_MODE=onefile
+            make build-mcp PYINSTALLER_MODE=onefile
           else
             pyinstaller --onefile --name zcli \
               --paths src \
@@ -122,18 +123,18 @@ jobs:
               entrypoint_mcp.py
           fi
 
-      - name: Test executable
+      - name: Test onefile executable
         working-directory: cli
         shell: bash
         run: |
           ./dist/${{ matrix.executable }} --help
           ./dist/${{ matrix.executable }} --version
 
-      - name: Test MCP executable
+      - name: Test onefile MCP executable
         working-directory: cli
         shell: bash
         run: |
-          test -f ./dist/${{ matrix.mcp_executable }}
+          test -f ./dist/${{ matrix.executable }}
           python - <<'PY'
           import anyio
           from mcp import ClientSession
@@ -165,13 +166,48 @@ jobs:
           anyio.run(main)
           PY
 
-      - name: Upload artifact
+      - name: Save onefile artifacts
+        working-directory: cli
+        shell: bash
+        run: |
+          mkdir -p build-out/onefile
+          cp dist/${{ matrix.executable }} build-out/onefile/
+          cp dist/${{ matrix.mcp_executable }} build-out/onefile/
+
+      - name: Build onedir (faster startup)
+        working-directory: cli
+        shell: bash
+        run: |
+          make clean
+          make build PYINSTALLER_MODE=onedir
+          make build-mcp PYINSTALLER_MODE=onedir
+
+      - name: Package onedir
+        working-directory: cli
+        shell: bash
+        run: |
+          mkdir -p build-out/onedir
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            zip -r build-out/onedir/zcli-${{ matrix.platform }}-x64-onedir.zip dist/zcli/ dist/zcli-mcp/
+          else
+            tar -czf build-out/onedir/zcli-${{ matrix.platform }}-x64-onedir.tar.gz -C dist zcli/ zcli-mcp/
+          fi
+
+      - name: Upload onefile artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zcli-${{ matrix.platform }}
+          name: zcli-${{ matrix.platform }}-onefile
           path: |
-            cli/dist/${{ matrix.executable }}
-            cli/dist/${{ matrix.mcp_executable }}
+            cli/build-out/onefile/${{ matrix.executable }}
+            cli/build-out/onefile/${{ matrix.mcp_executable }}
+          retention-days: 1
+
+      - name: Upload onedir artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zcli-${{ matrix.platform }}-onedir
+          path: |
+            cli/build-out/onedir/*
           retention-days: 1
 
   # Create GitHub Release with all artifacts
@@ -190,34 +226,57 @@ jobs:
           name: zoteroofmine-xpi
           path: artifacts/plugin
 
-      - name: Download Linux artifact
+      - name: Download Linux onefile artifact
         uses: actions/download-artifact@v4
         with:
-          name: zcli-linux
-          path: artifacts/linux
+          name: zcli-linux-onefile
+          path: artifacts/linux/onefile
 
-      - name: Download Windows artifact
+      - name: Download Linux onedir artifact
         uses: actions/download-artifact@v4
         with:
-          name: zcli-windows
-          path: artifacts/windows
+          name: zcli-linux-onedir
+          path: artifacts/linux/onedir
 
-      - name: Download macOS artifact
+      - name: Download Windows onefile artifact
         uses: actions/download-artifact@v4
         with:
-          name: zcli-macos
-          path: artifacts/macos
+          name: zcli-windows-onefile
+          path: artifacts/windows/onefile
+
+      - name: Download Windows onedir artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zcli-windows-onedir
+          path: artifacts/windows/onedir
+
+      - name: Download macOS onefile artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zcli-macos-onefile
+          path: artifacts/macos/onefile
+
+      - name: Download macOS onedir artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zcli-macos-onedir
+          path: artifacts/macos/onedir
 
       - name: Prepare release assets
         run: |
           mkdir -p release
           mv artifacts/plugin/zoteroofmine.xpi release/
-          mv artifacts/linux/zcli release/zcli-linux-x64
-          mv artifacts/linux/zcli-mcp release/zcli-mcp-linux-x64
-          mv artifacts/windows/zcli.exe release/zcli-windows-x64.exe
-          mv artifacts/windows/zcli-mcp.exe release/zcli-mcp-windows-x64.exe
-          mv artifacts/macos/zcli release/zcli-macos-x64
-          mv artifacts/macos/zcli-mcp release/zcli-mcp-macos-x64
+          # Onefile (single executable)
+          mv artifacts/linux/onefile/zcli release/zcli-linux-x64
+          mv artifacts/linux/onefile/zcli-mcp release/zcli-mcp-linux-x64
+          mv artifacts/windows/onefile/zcli.exe release/zcli-windows-x64.exe
+          mv artifacts/windows/onefile/zcli-mcp.exe release/zcli-mcp-windows-x64.exe
+          mv artifacts/macos/onefile/zcli release/zcli-macos-x64
+          mv artifacts/macos/onefile/zcli-mcp release/zcli-mcp-macos-x64
+          # Onedir (faster startup, compressed)
+          mv artifacts/linux/onedir/*.tar.gz release/
+          mv artifacts/windows/onedir/*.zip release/
+          mv artifacts/macos/onedir/*.tar.gz release/
           chmod +x release/zcli-linux-x64 release/zcli-macos-x64 release/zcli-mcp-linux-x64 release/zcli-mcp-macos-x64
 
       - name: Create SHA256 checksums
@@ -241,43 +300,48 @@ jobs:
             | `zoteroofmine.xpi` | Zotero 7 plugin, install via Tools > Add-ons |
             
             ### CLI Tool (zcli)
-            | Platform | File |
-            |----------|------|
-            | Linux (x64) | `zcli-linux-x64` |
-            | Windows (x64) | `zcli-windows-x64.exe` |
-            | macOS (x64) | `zcli-macos-x64` |
-            
-            ### MCP Server (zcli-mcp)
-            | Platform | File |
-            |----------|------|
-            | Linux (x64) | `zcli-mcp-linux-x64` |
-            | Windows (x64) | `zcli-mcp-windows-x64.exe` |
-            | macOS (x64) | `zcli-mcp-macos-x64` |
-            
+            Two formats are available:
+
+            | Format | File | Description | Startup Speed |
+            |--------|------|-------------|---------------|
+            | Onefile (single executable) | `zcli-<platform>-x64` | Easy installation, single file | Slower (needs decompression on every run) |
+            | Onedir (directory) | `zcli-<platform>-x64-onedir.{tar.gz/zip}` | Faster, recommended for frequent use | Fast (no decompression) |
+
             ### Checksums
             See `checksums.txt` for SHA256 checksums.
-            
+
             ### Installation
-            
+
             **Zotero Plugin:**
             1. Download `zoteroofmine.xpi`
             2. In Zotero: Tools → Add-ons → Gear icon → Install Add-on From File
-            
-            **CLI Tool:**
+
+            **CLI Tool - Onefile (easy install):**
             ```bash
             # Linux/macOS
             chmod +x zcli-linux-x64   # or zcli-macos-x64
             sudo mv zcli-linux-x64 /usr/local/bin/zcli
             ```
 
-            **MCP Server:**
+            **CLI Tool - Onedir (faster startup):**
             ```bash
             # Linux/macOS
+            tar -xzf zcli-linux-x64-onedir.tar.gz -C /tmp
+            sudo mkdir -p /usr/local/share/zcli
+            sudo cp -a /tmp/zcli /usr/local/share/zcli
+            sudo cp -a /tmp/zcli-mcp /usr/local/share/zcli-mcp
+            sudo ln -sf /usr/local/share/zcli/zcli /usr/local/bin/zcli
+            sudo ln -sf /usr/local/share/zcli-mcp/zcli-mcp /usr/local/bin/zcli-mcp
+            ```
+
+            **MCP Server:**
+            ```bash
+            # Linux/macOS (onefile)
             chmod +x zcli-mcp-linux-x64   # or zcli-mcp-macos-x64
             sudo mv zcli-mcp-linux-x64 /usr/local/bin/zcli-mcp
             codex mcp add zcli -- zcli-mcp
             ```
-            
+
             ```powershell
             # Windows
             # Add zcli.exe to your PATH

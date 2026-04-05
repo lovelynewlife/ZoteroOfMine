@@ -194,9 +194,10 @@ ZoteroOfMine/
 pnpm run build
 # → build/zoteroofmine.xpi
 
-# Build CLI binary
+# Build CLI binary (default: onedir mode, faster startup)
 cd cli && make build
-# → dist/zcli
+# → dist/zcli/zcli (onedir mode)
+# → dist/zcli (onefile mode, if PYINSTALLER_MODE=onefile)
 ```
 
 ### Testing
