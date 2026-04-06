@@ -89,7 +89,6 @@ export class HistoryStorage {
     if (!this.isLoaded) {
       ztoolkit.log("[HistoryStorage] Data not loaded, loading from file...");
       await this.ensureLoaded();
-      this.isLoaded = true;
     }
 
     const itemID = entry.item.id;
@@ -295,14 +294,14 @@ export class HistoryStorage {
   async loadFromJSON(): Promise<void> {
     try {
       const filePath = this.getJSONFilePath();
-      
+
       if (!(await IOUtils.exists(filePath))) {
         ztoolkit.log("[HistoryStorage] File does not exist, skipping load");
         this.isLoaded = true;
         return;
       }
 
-      // Read file and load to memory
+      // Read file and parse first - don't modify memory until data is validated
       const jsonString = await IOUtils.readUTF8(filePath);
       const data: HistoryJSONFile = JSON.parse(jsonString as string);
 
@@ -312,10 +311,10 @@ export class HistoryStorage {
         return;
       }
 
-      // Clear memory and load file entries
-      this.entriesArray = [];
-      this.entriesMap.clear();
-      this.entriesByItemID.clear();
+      // Load into temporary storage first
+      const newEntriesArray: ReadingHistoryEntry[] = [];
+      const newEntriesMap = new Map<string, ReadingHistoryEntry>();
+      const newEntriesByItemID = new Map<number, ReadingHistoryEntry>();
 
       let loadedCount = 0;
       for (const { itemID, captureTime } of data.entries) {
@@ -340,20 +339,27 @@ export class HistoryStorage {
         const id = this.generateId(itemID, captureTime);
         const entry: ReadingHistoryEntry = { id, captureTime, item: itemInfo };
 
-        this.entriesArray.push(entry);
-        this.entriesMap.set(id, entry);
-        this.entriesByItemID.set(itemID, entry);
+        newEntriesArray.push(entry);
+        newEntriesMap.set(id, entry);
+        newEntriesByItemID.set(itemID, entry);
         loadedCount++;
       }
 
       // Sort by captureTime (newest first)
-      this.entriesArray.sort((a, b) => b.captureTime - a.captureTime);
+      newEntriesArray.sort((a, b) => b.captureTime - a.captureTime);
+
+      // Only now replace the old data with new data
+      // This ensures that if anything went wrong during loading, old data is preserved
+      this.entriesArray = newEntriesArray;
+      this.entriesMap = newEntriesMap;
+      this.entriesByItemID = newEntriesByItemID;
 
       ztoolkit.log("[HistoryStorage] Successfully loaded", loadedCount, "entries");
       this.isLoaded = true;
     } catch (e) {
       ztoolkit.log("[HistoryStorage] Load failed:", e);
-      this.isLoaded = true;
+      // Don't set isLoaded = true on error - allow retry later
+      // This prevents empty memory from being saved when load fails
     }
   }
 
