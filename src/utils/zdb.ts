@@ -10,11 +10,13 @@ import { getString } from "./locale";
  */
 export interface ItemInfo {
   id: number;
+  key: string;
   title: string;
   authors: string;
   year: string;
   publication: string;
   doi: string;
+  url: string;
   abstract: string;
 }
 
@@ -208,11 +210,13 @@ export class ZDB {
 
     return {
       id: targetItem.id,
+      key: targetItem.key,
       title: this.getItemTitle(targetItem),
       authors: this.getItemAuthors(targetItem),
       year: this.getItemYear(targetItem),
       publication: this.getItemPublication(targetItem),
       doi: this.getItemDOI(targetItem),
+      url: this.getItemURL(targetItem),
       abstract: this.getItemAbstract(targetItem),
     };
   }

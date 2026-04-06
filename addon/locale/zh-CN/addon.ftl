@@ -42,3 +42,8 @@ ccp-copy-success = 已复制到剪贴板
 ccp-copy-success-multiple = 已复制 { $count } 个条目到剪贴板
 ccp-no-selection = 未选中任何条目
 ccp-copy-error = 复制到剪贴板失败
+
+# CCP PDF Selection
+ccp-copy-selection-as-context = 拷贝为AI上下文
+ccp-copy-selection-success = 已复制选中文本到剪贴板
+ccp-no-parent-item = 未找到父条目

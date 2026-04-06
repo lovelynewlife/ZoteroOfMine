@@ -327,11 +327,13 @@ export class HistoryStorage {
 
         const itemInfo: ItemInfo = {
           id: item.id,
+          key: item.key,
           title: ZDB.getItemTitle(item),
           authors: ZDB.getItemAuthors(item),
           year: ZDB.getItemYear(item),
           publication: ZDB.getItemPublication(item),
           doi: ZDB.getItemDOI(item),
+          url: ZDB.getItemURL(item),
           abstract: ZDB.getItemAbstract(item),
         };
 

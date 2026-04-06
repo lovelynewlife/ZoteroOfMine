@@ -42,3 +42,8 @@ ccp-copy-success = Copied to clipboard
 ccp-copy-success-multiple = Copied { $count } items to clipboard
 ccp-no-selection = No items selected
 ccp-copy-error = Failed to copy to clipboard
+
+# CCP PDF Selection
+ccp-copy-selection-as-context = Copy as AI Context
+ccp-copy-selection-success = Copied selection to clipboard
+ccp-no-parent-item = No parent item found

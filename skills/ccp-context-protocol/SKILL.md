@@ -40,6 +40,30 @@ CCP (Clipboard Context Protocol) is an open protocol for structured context exch
 }
 ```
 
+### PDF Text Selection
+When user selects text in PDF reader and copies as AI context:
+```json
+{
+  "ccp": "1.0",
+  "source": "zotero",
+  "item": {
+    "key": "XQRMYQUN",
+    "title": "Attention Is All You Need",
+    "authors": ["Vaswani, A.", "Shazeer, N."],
+    "year": "2017"
+  },
+  "selection": {
+    "text": "The Transformer uses multi-head attention to allow the model to jointly attend to information from different representation subspaces at different positions.",
+    "pageLabel": "3"
+  },
+  "hint": "The user selected this text from a PDF in Zotero. You can use zcli commands..."
+}
+```
+
+The `selection` field indicates:
+- `text`: The selected text content
+- `pageLabel`: (optional) The page number where the text was selected
+
 ## Detection and Parsing
 
 ### Detection Rules
@@ -76,6 +100,7 @@ When CCP context is detected:
 | Context Type | Recommended Action |
 |--------------|-------------------|
 | Single item with key | `zcli get <key>` for full metadata |
+| PDF selection | Focus on the selected text, use item for context |
 | Research topic | `zcli search "<title keywords>"` |
 | Author exploration | `zcli search "<author name>"` |
 | No zcli available | Use inline context directly |
@@ -136,6 +161,40 @@ You've shared 2 papers from Zotero:
 2. Paper 2 (2022)
 
 How would you like me to help with these papers?
+```
+
+### Example 3: PDF Text Selection
+
+**Input (CCP with selection from PDF):**
+```json
+{
+  "ccp": "1.0",
+  "source": "zotero",
+  "item": {
+    "key": "XQRMYQUN",
+    "title": "Attention Is All You Need",
+    "authors": ["Vaswani, A.", "Shazeer, N."],
+    "year": "2017"
+  },
+  "selection": {
+    "text": "The Transformer uses multi-head attention to allow the model to jointly attend to information from different representation subspaces at different positions.",
+    "pageLabel": "3"
+  },
+  "hint": "The user selected this text from a PDF in Zotero..."
+}
+```
+
+**AI Response:**
+```
+I see you've selected a passage from "Attention Is All You Need" (page 3):
+
+> "The Transformer uses multi-head attention to allow the model to jointly attend to information from different representation subspaces at different positions."
+
+This describes the multi-head attention mechanism, a key innovation in the Transformer architecture. Would you like me to:
+
+1. Explain this concept in more detail?
+2. Find related papers on attention mechanisms?
+3. Search your Zotero library for other papers by these authors?
 ```
 
 ## Error Handling

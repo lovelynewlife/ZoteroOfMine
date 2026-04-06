@@ -9,7 +9,7 @@ import { ReadingHistoryFactory } from "./modules/readingHistory";
 import { HistoryStorage } from "./modules/historyStore";
 import { HistoryPreferenceScript } from "./modules/historyPreferenceScript";
 import { VibeResearchFactory } from "./modules/vibeResearch";
-import { CCPProducerFactory } from "./modules/ccpProducer";
+import { CCPProducerFactory, CCPPDFProducerFactory } from "./modules/ccpProducer";
 import { config } from "../package.json";
 import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
@@ -90,6 +90,9 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   // === CCP Producer (Copy as AI Context) ===
   CCPProducerFactory.register();
 
+  // === CCP PDF Producer (Copy PDF selection as AI Context) ===
+  CCPPDFProducerFactory.register();
+
   // Add mock data for testing (only if no real data exists)
   // const storage = HistoryStorage.getInstance();
   // await storage.ensureLoaded();
@@ -113,6 +116,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
   await ReadingHistoryFactory.unregister();
   VibeResearchFactory.unregister();
   CCPProducerFactory.unregister();
+  CCPPDFProducerFactory.unregister();
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
 }

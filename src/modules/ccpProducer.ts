@@ -20,6 +20,14 @@ interface CCPItem {
 }
 
 /**
+ * CCP text selection structure
+ */
+interface CCPSelection {
+  text: string;
+  pageLabel?: string;
+}
+
+/**
  * CCP single item structure
  */
 interface CCPContextSingle {
@@ -39,7 +47,18 @@ interface CCPContextMultiple {
   hint: string;
 }
 
-type CCPContext = CCPContextSingle | CCPContextMultiple;
+/**
+ * CCP context with text selection (from PDF reader)
+ */
+interface CCPContextWithSelection {
+  ccp: "1.0";
+  source: "zotero";
+  item: CCPItem;
+  selection: CCPSelection;
+  hint: string;
+}
+
+type CCPContext = CCPContextSingle | CCPContextMultiple | CCPContextWithSelection;
 
 /**
  * CCP Producer Factory
@@ -183,10 +202,167 @@ export class CCPProducerFactory {
   }
 
   /**
-   * Show notification popup
+   * Show notification popup (auto close after 5 seconds)
    */
   private static showNotification(text: string, type: "success" | "warning" | "fail" = "success"): void {
-    new ztoolkit.ProgressWindow(config.addonName)
+    new ztoolkit.ProgressWindow(config.addonName, { closeTime: 5000 })
+      .createLine({
+        text,
+        type,
+        progress: 100,
+      })
+      .show();
+  }
+}
+
+/**
+ * CCP PDF Producer Factory
+ * Handles copying PDF text selection as AI context
+ */
+export class CCPPDFProducerFactory {
+  private static readonly CCP_HINT_SELECTION = 
+    "The user selected this text from a PDF in Zotero. " +
+    "You can use zcli commands (e.g., zcli get KEY, zcli search) to get more information about the paper. " +
+    "Feel free to handle this context in your own way if zcli is not available.";
+
+  /**
+   * Register the PDF reader view context menu hook
+   */
+  static register(): void {
+    ztoolkit.log("[CCP-PDF] Registering PDF view context menu hook");
+
+    Zotero.Reader.registerEventListener(
+      "createViewContextMenu",
+      (event: {
+        reader: _ZoteroTypes.ReaderInstance;
+        params: { x: number; y: number };
+        append: (menuItem: { label: string; onCommand: () => void }) => void;
+        type: "createViewContextMenu";
+      }) => {
+        this.onViewContextMenu(event);
+      }
+    );
+
+    ztoolkit.log("[CCP-PDF] PDF view context menu hook registered");
+  }
+
+  /**
+   * Unregister the hook
+   */
+  static unregister(): void {
+    // Reader event listeners are automatically cleaned up
+  }
+
+  /**
+   * Handle view context menu event
+   */
+  private static onViewContextMenu(
+    event: {
+      reader: _ZoteroTypes.ReaderInstance;
+      params: { x: number; y: number };
+      append: (menuItem: { label: string; onCommand: () => void }) => void;
+      type: "createViewContextMenu";
+    }
+  ): void {
+    const { reader, append } = event;
+
+    // Check if there is selected text
+    const selectedText = ztoolkit.Reader.getSelectedText(reader);
+    if (!selectedText || selectedText.trim().length === 0) {
+      ztoolkit.log("[CCP-PDF] No text selected, skipping");
+      return;
+    }
+
+    ztoolkit.log("[CCP-PDF] Text selected:", selectedText.substring(0, 50));
+
+    // Add menu item using appendMenu format
+    append({
+      label: getString("ccp-copy-selection-as-context"),
+      onCommand: () => {
+        this.onCopySelectionContext(reader, selectedText);
+      },
+    });
+
+    ztoolkit.log("[CCP-PDF] Menu item added");
+  }
+
+  /**
+   * Handle copy selection context command
+   */
+  private static async onCopySelectionContext(
+    reader: _ZoteroTypes.ReaderInstance,
+    selectedText: string
+  ): Promise<void> {
+    try {
+      // Get parent item from attachment
+      const itemInfo = ZDB.getItemInfoByAttachmentID(reader.itemID!);
+      if (!itemInfo) {
+        this.showNotification(getString("ccp-no-parent-item"), "warning");
+        return;
+      }
+
+      // Get page label if available
+      const pageLabel = this.getCurrentPageLabel(reader);
+
+      // Build CCP with selection
+      const ccp: CCPContextWithSelection = {
+        ccp: "1.0",
+        source: "zotero",
+        item: {
+          key: itemInfo.key,
+          title: itemInfo.title,
+          authors: this.parseAuthors(itemInfo.authors),
+          year: itemInfo.year,
+          ...(itemInfo.doi && { doi: itemInfo.doi }),
+          ...(itemInfo.url && { url: itemInfo.url }),
+        },
+        selection: {
+          text: selectedText.trim(),
+          ...(pageLabel && { pageLabel }),
+        },
+        hint: this.CCP_HINT_SELECTION.replace("KEY", itemInfo.key),
+      };
+
+      const jsonStr = JSON.stringify(ccp, null, 2);
+      await Zotero.Utilities.Internal.copyTextToClipboard(jsonStr);
+
+      this.showNotification(getString("ccp-copy-selection-success"), "success");
+      ztoolkit.log("[CCP-PDF] Copied selection context to clipboard");
+    } catch (e) {
+      ztoolkit.log("[CCP-PDF] Error copying selection context:", e);
+      this.showNotification(getString("ccp-copy-error"), "fail");
+    }
+  }
+
+  /**
+   * Get current page label from reader
+   */
+  private static getCurrentPageLabel(reader: _ZoteroTypes.ReaderInstance): string | undefined {
+    try {
+      const state = reader.state;
+      if (state && typeof state.pageIndex === "number") {
+        // Page labels are 1-indexed in display
+        return String(state.pageIndex + 1);
+      }
+    } catch {
+      // Ignore errors
+    }
+    return undefined;
+  }
+
+  /**
+   * Parse authors string into array
+   */
+  private static parseAuthors(authorsStr: string): string[] {
+    if (!authorsStr) return [];
+    return authorsStr.split(", ").filter(a => a.trim());
+  }
+
+  /**
+   * Show notification popup (auto close after 5 seconds)
+   */
+  private static showNotification(text: string, type: "success" | "warning" | "fail" = "success"): void {
+    new ztoolkit.ProgressWindow(config.addonName, { closeTime: 5000 })
       .createLine({
         text,
         type,
