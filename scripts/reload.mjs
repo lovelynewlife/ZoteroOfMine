@@ -12,7 +12,16 @@ const startZotero = `"${zoteroBinPath}" --debugger --purgecaches -profile "${pro
 const script = `
 (async () => {
   Services.obs.notifyObservers(null, "startupcache-invalidate", null);
-  const { AddonManager } = ChromeUtils.import("resource://gre/modules/AddonManager.jsm");
+  const importModule = (path) => {
+    if (typeof ChromeUtils.import === "undefined") {
+      return ChromeUtils.importESModule(path, { global: "contextual" });
+    }
+    if (path.endsWith(".sys.mjs")) {
+      path = path.replace(/\\.sys\\.mjs$/, ".jsm");
+    }
+    return ChromeUtils.import(path);
+  };
+  const { AddonManager } = importModule("resource://gre/modules/AddonManager.sys.mjs");
   const addon = await AddonManager.getAddonByID("${addonID}");
   await addon.reload();
   const progressWindow = new Zotero.ProgressWindow({ closeOnClick: true });

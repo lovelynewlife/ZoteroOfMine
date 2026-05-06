@@ -70,22 +70,44 @@ export class CCPProducerFactory {
     "Feel free to handle this context in your own way if zcli is not available.";
 
   private static menuItemId = `${config.addonRef}-ccp-copy`;
+  private static menuPopupId = "zotero-itemmenu";
+  private static popupListeners = new WeakMap<Window, EventListener>();
 
   /**
    * Register the right-click menu item
    */
-  static register(): void {
-    ztoolkit.log("[CCP] Registering CCP context menu item");
+  static register(win: Window = window): void {
+    const doc = win.document;
+    const popup = doc.getElementById(this.menuPopupId) as XUL.MenuPopup | null;
+    if (!popup) {
+      ztoolkit.log(`[CCP] Item menu popup not found: ${this.menuPopupId}`);
+      return;
+    }
 
-    const menuIcon = `chrome://${config.addonRef}/content/icons/ai-talk.svg`;
+    let menuItem = doc.getElementById(this.menuItemId) as XUL.MenuItem | null;
+    if (!menuItem) {
+      menuItem = ztoolkit.createXULElement(doc, "menuitem") as XUL.MenuItem;
+      menuItem.id = this.menuItemId;
+      menuItem.label = getString("ccp-copy-as-context");
+      menuItem.setAttribute("class", "menuitem-iconic");
+      menuItem.setAttribute("image", `chrome://${config.addonRef}/content/icons/favicon@0.5x.png`);
+      menuItem.addEventListener("command", () => {
+        void this.onCopyContext();
+      });
+      popup.appendChild(menuItem);
+    }
 
-    ztoolkit.Menu.register("item", {
-      tag: "menuitem",
-      id: this.menuItemId,
-      label: getString("ccp-copy-as-context"),
-      commandListener: () => this.onCopyContext(),
-      icon: menuIcon,
-    });
+    if (!this.popupListeners.has(win)) {
+      const listener: EventListener = () => {
+        const item = doc.getElementById(this.menuItemId) as XUL.MenuItem | null;
+        if (!item) {
+          return;
+        }
+        item.hidden = this.getSelectedItems().length === 0;
+      };
+      popup.addEventListener("popupshowing", listener);
+      this.popupListeners.set(win, listener);
+    }
 
     ztoolkit.log("[CCP] Context menu item registered");
   }
@@ -93,8 +115,19 @@ export class CCPProducerFactory {
   /**
    * Unregister the menu item
    */
-  static unregister(): void {
-    // Menu items are automatically cleaned up by ztoolkit
+  static unregister(win: Window = window): void {
+    const doc = win.document;
+    const popup = doc.getElementById(this.menuPopupId) as XUL.MenuPopup | null;
+    const listener = this.popupListeners.get(win);
+    if (popup && listener) {
+      popup.removeEventListener("popupshowing", listener);
+      this.popupListeners.delete(win);
+    }
+
+    const menuItem = doc.getElementById(this.menuItemId);
+    if (menuItem?.parentElement) {
+      menuItem.parentElement.removeChild(menuItem);
+    }
   }
 
   /**
@@ -225,23 +258,33 @@ export class CCPPDFProducerFactory {
     "You can use zcli commands (e.g., zcli get KEY, zcli search) to get more information about the paper. " +
     "Feel free to handle this context in your own way if zcli is not available.";
 
+  private static listenerRegistered = false;
+  private static readonly viewContextMenuHandler = (event: {
+    reader: _ZoteroTypes.ReaderInstance;
+    params: { x: number; y: number };
+    append: (menuItem: { label: string; onCommand: () => void }) => void;
+    type: "createViewContextMenu";
+  }) => {
+    this.onViewContextMenu(event);
+  };
+
   /**
    * Register the PDF reader view context menu hook
    */
   static register(): void {
+    if (this.listenerRegistered) {
+      return;
+    }
+
     ztoolkit.log("[CCP-PDF] Registering PDF view context menu hook");
 
     Zotero.Reader.registerEventListener(
       "createViewContextMenu",
-      (event: {
-        reader: _ZoteroTypes.ReaderInstance;
-        params: { x: number; y: number };
-        append: (menuItem: { label: string; onCommand: () => void }) => void;
-        type: "createViewContextMenu";
-      }) => {
-        this.onViewContextMenu(event);
-      }
+      this.viewContextMenuHandler,
+      config.addonID,
     );
+
+    this.listenerRegistered = true;
 
     ztoolkit.log("[CCP-PDF] PDF view context menu hook registered");
   }
@@ -250,7 +293,15 @@ export class CCPPDFProducerFactory {
    * Unregister the hook
    */
   static unregister(): void {
-    // Reader event listeners are automatically cleaned up
+    if (!this.listenerRegistered) {
+      return;
+    }
+
+    Zotero.Reader.unregisterEventListener(
+      "createViewContextMenu",
+      this.viewContextMenuHandler,
+    );
+    this.listenerRegistered = false;
   }
 
   /**

@@ -4,7 +4,7 @@
  */
 
 import { config } from "../../package.json";
-import { HistoryPreferences, HistoryPrefKeys, CooldownConstraints } from "./historyPreferences";
+import { HistoryPreferences, CooldownConstraints } from "./historyPreferences";
 
 /**
  * HistoryPreferenceScript class
@@ -12,22 +12,31 @@ import { HistoryPreferences, HistoryPrefKeys, CooldownConstraints } from "./hist
  */
 export class HistoryPreferenceScript {
   private static window: Window | null = null;
+  private static paneID: string | null = null;
 
   /**
    * Register preference panel
    * Called during plugin startup
    */
-  static registerPrefsPanel(): void {
-    ztoolkit.log("[HistoryPreferenceScript] Registering preference panel");
-    
-    const prefOptions = {
-      pluginID: config.addonID,
-      src: rootURI + "chrome/content/preferences.xhtml",
-      label: "ZoteroOfMine",  // Panel name in Zotero preferences
-      image: `chrome://${config.addonRef}/content/icons/favicon.png`,
-      defaultXUL: true,
-    };
-    ztoolkit.PreferencePane.register(prefOptions);
+  static async registerPrefsPanel(): Promise<void> {
+    if (this.paneID) {
+      return;
+    }
+
+    try {
+      const prefOptions = {
+        pluginID: config.addonID,
+        src: rootURI + "chrome/content/preferences.xhtml",
+        id: `zotero-prefpane-${config.addonRef}`,
+        label: "ZoteroOfMine",
+        image: `chrome://${config.addonRef}/content/icons/favicon.png`,
+      };
+
+      this.paneID = await Zotero.PreferencePanes.register(prefOptions);
+      ztoolkit.log(`[HistoryPreferenceScript] Preference panel registered: ${this.paneID}`);
+    } catch (error) {
+      ztoolkit.log("[HistoryPreferenceScript] Failed to register preference panel", error);
+    }
   }
 
   /**

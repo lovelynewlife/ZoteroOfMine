@@ -7,6 +7,8 @@
     "addonID": "zoteroofmine@github.com",
     "addonRef": "zoteroofmine",
     "addonInstance": "ZoteroOfMine",
+    "zoteroMinVersion": "6.999",
+    "zoteroMaxVersion": "9.0.*",
     "prefsPrefix": "extensions.zotero.zoteroofmine",
     "releasepage": "",
     "updaterdf": "https://github.com/lovelynewlife/ZoteroOfMine/main/update.json"
@@ -41,7 +43,7 @@
   },
   "homepage": "https://github.com/windingwind/zotero-addon-template#readme",
   "dependencies": {
-    "zotero-plugin-toolkit": "^2.2.8"
+    "zotero-plugin-toolkit": "^5.1.2"
   },
   "devDependencies": {
     "@types/node": "^20.4.2",

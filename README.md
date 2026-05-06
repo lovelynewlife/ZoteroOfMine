@@ -1,12 +1,14 @@
 # ZoteroOfMine
 
-[![Zotero Version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org/)
+[![Zotero Version](https://img.shields.io/badge/Zotero-7--9-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
 [![CI](https://github.com/lovelynewlife/ZoteroOfMine/actions/workflows/ci.yml/badge.svg)](https://github.com/lovelynewlife/ZoteroOfMine/actions/workflows/ci.yml)
 [![Release](https://github.com/lovelynewlife/ZoteroOfMine/actions/workflows/release.yml/badge.svg)](https://github.com/lovelynewlife/ZoteroOfMine/releases)
 
-A personal Zotero 7 plugin and CLI tool for tracking and managing PDF reading history, with AI-powered research capabilities via LLM Tool Calling and CCP (Clipboard Context Protocol).
+A personal Zotero plugin and CLI tool for tracking and managing PDF reading history, with AI-powered research capabilities via LLM Tool Calling and CCP (Clipboard Context Protocol).
+
+Compatibility status: the add-on manifest now targets Zotero 7 through 9, but Zotero 8/9 runtime behavior should still be verified on real builds because some toolkit internals changed across those platform upgrades.
 
 ## ✨ Features
 
@@ -61,7 +63,7 @@ A standalone CLI tool for querying your local Zotero database. Designed for LLM 
 #### From Release (Recommended)
 
 1. Download the latest `zoteroofmine.xpi` from the [Releases](https://github.com/lovelynewlife/ZoteroOfMine/releases) page
-2. Open Zotero 7
+2. Open Zotero
 3. Go to `Tools` → `Add-ons`
 4. Click the gear icon → `Install Add-on From File`
 5. Select the downloaded `.xpi` file

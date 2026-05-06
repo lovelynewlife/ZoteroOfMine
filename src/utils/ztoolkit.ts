@@ -1,4 +1,4 @@
-import ZoteroToolkit from "zotero-plugin-toolkit";
+import { ZoteroToolkit } from "zotero-plugin-toolkit";
 import { config } from "../../package.json";
 
 export { createZToolkit };
@@ -29,10 +29,10 @@ function initZToolkit(_ztoolkit: ReturnType<typeof createZToolkit>) {
   );
 }
 
-import { BasicTool, unregister } from "zotero-plugin-toolkit/dist/basic";
-import { UITool } from "zotero-plugin-toolkit/dist/tools/ui";
-import { PreferencePaneManager } from "zotero-plugin-toolkit/dist/managers/preferencePane";
-
+// NOTE: toolkit 5.1.2 removed PreferencePaneManager and other custom managers
+// These will be implemented using new Zotero 8+ APIs
+// import { BasicTool, unregister, UITool, PreferencePaneManager } from "zotero-plugin-toolkit";
+/*
 class MyToolkit extends BasicTool {
   UI: UITool;
   PreferencePane: PreferencePaneManager;
@@ -47,3 +47,4 @@ class MyToolkit extends BasicTool {
     unregister(this);
   }
 }
+*/
